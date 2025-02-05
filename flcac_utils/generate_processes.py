@@ -383,10 +383,11 @@ def write_objects(name: str,
                   flows: dict[str, olca.Flow],
                   new_flows_to_write: list,
                   processes: dict[str, olca.Process],
-                  *args
+                  *args,
+                  out_path=outPath
                   ):
     """
-    Writes a collection of objects to json-ld to the outPath
+    Writes a collection of objects to json-ld to the out_path
 
     :param name: str, stub for json-ld filename
     :param flows: dict[UUID, olca.Flow]
@@ -417,15 +418,16 @@ def write_objects(name: str,
     json_file = f'{name}_olca2.0_{timestr}.zip'
     
     # Remove existing json (otherwise it gets extended)
-    (outPath / json_file).unlink(missing_ok=True)
+    (out_path / json_file).unlink(missing_ok=True)
     # Create output folder if it doesn't exist
-    outPath.mkdir(parents=False, exist_ok=True)
+    out_path.mkdir(parents=False, exist_ok=True)
+    print(f"Writing json to {out_path/json_file}")
     # write flows directly from flow list based on those found in processes
-    fedelemflowlist.write_jsonld(flowlist, path=outPath / json_file)
+    fedelemflowlist.write_jsonld(flowlist, path=out_path / json_file)
     # write tech flows
-    _write_obj(file=json_file, obj=t_flowlist, path=outPath)
+    _write_obj(file=json_file, obj=t_flowlist, path=out_path)
     # write processes
-    _write_obj(file=json_file, obj=processes, path=outPath)
+    _write_obj(file=json_file, obj=processes, path=out_path)
     # write additional objects as needed
     for a in args:
-        _write_obj(file=json_file, obj=a, path=outPath)
+        _write_obj(file=json_file, obj=a, path=out_path)

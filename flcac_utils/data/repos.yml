@@ -1,0 +1,47 @@
+
+US Electricity Baseline:
+  owner: 'Federal_LCA_Commons'
+  repo: 'US_electricity_baseline'
+
+# FEDEFL:
+#   owner: 'Federal_LCA_Commons'
+#   repo: 'elementary_flow_list'
+#   object_types: ["UNIT_GROUP"]
+
+Federal LCA Commons Core Database:
+  owner: 'Federal_LCA_Commons'
+  repo: 'Fed_Commons_core_database'
+  object_types: ["DQ_SYSTEM"]
+
+Heavy equipment operation:
+  owner: 'US_Environmental_Protection_Agency'
+  repo: 'Heavy_equipment_operation'
+
+Construction and Demolition Debris Management:
+  owner: 'US_Environmental_Protection_Agency'
+  repo: 'Construction_and_demolition_2022_update_2'
+
+USLCI:
+  owner: 'National_Renewable_Energy_Laboratory'
+  repo: 'USLCI_Database_Public'
+
+MTU Asphalt Pavement Framework:
+  owner: 'Federal_Highway_Administration'
+  repo: 'mtu_pavement'
+
+Coal extraction:
+  owner: 'National_Energy_Technology_Lab'
+  repo: 'Coal_extraction'
+
+CORRIM:
+  owner: 'CORRIM'
+  repo: 'Forestry_and_forest_products'
+
+Woody Biomass:
+  owner: 'US_Forest_Service_Forest_Products_Lab'
+  repo: 'Woody_biomass'
+
+CED Method:
+  owner: 'Federal_LCA_Commons'
+  repo: 'CED_Method'
+  object_types: ['IMPACT_METHOD']

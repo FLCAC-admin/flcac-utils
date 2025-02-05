@@ -1,0 +1,7 @@
+submission_tool/output*
+output/*
+electricity/yearly_full_release_long_format.csv
+*__pycache__*
+*egg-info/*
+!output/USLCI_lcia.csv
+!output/USLCI_meta.json

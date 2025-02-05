@@ -1,0 +1,77 @@
+## General Information
+
+description: >
+    This is the process description.
+
+# valid_until: 2023 # Assigned in code
+# valid_from: 2023 # Assigned in code
+
+time_description: >
+    This process reflects the generation mix of the region over the course of the entire year.
+
+geography_description: >
+    This process represents the generation mix of the entire region.
+
+technology_description: >
+    This is the tech description.
+
+## DQI methods
+
+
+## LCI method
+
+inventory_method_description: >
+    Not applicable.
+
+modeling_constants_description: >
+    Not applicable.
+
+## Data Source information
+
+completeness_description: >
+    This is the Data Completeness
+
+data_selection_description: >
+    This is the data selection
+
+data_treatment_description: >
+    This is the data treatment
+
+sampling_description: >
+    This is sampling procedure
+
+data_collection_description: >
+    This is data collection period
+
+use_advice: >
+    This process is intended to connect to electriciy generation processes from
+    the electricity baseline.
+
+sources:
+ - ember_climate_yearly_2024: Ember Climate 1
+ - ember_climate_data_2022: Ember Climate 2
+
+## Admin information
+
+project_description: >
+    This is project description.
+
+intended_application: >
+    This is intended application.
+
+data_set_owner: 
+    USLCI: 'Franklin Associates, A Division of ERG'
+
+data_generator:
+    USLCI: 'Some other guy'
+
+data_documentor:
+    USLCI: 'Franklin Associates, A Division of ERG'
+
+publication: 
+    flcac_international_electricity: 'ERG, International Electricity'
+
+# creation_date: # Turn off to assign automatically
+
+restrictions_description: >
+    Access and use restrictions.

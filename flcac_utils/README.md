@@ -1,4 +1,4 @@
-# Submission Tool back-end code
+# Generating JSON-ld objects from tabular data
 
 The general sequence to building objects is:
 
@@ -31,8 +31,8 @@ write_objects('my_name', flows, new_flows, processes,
               location_objs, source_objs, actor_objs)
 ```
 
-The input dataframe `df_olca` should conform to the exchange and process table [format specs](format_specs/exchanges.md).
-Process metadata is written in yaml, an example can be found for [electricity](../electricity/electricity_process_metadata.yaml).
+The input dataframe `df_olca` should conform to the exchange and process table [format specs](/format_specs/exchanges.md).
+Process metadata is written in yaml, an example can be found for [electricity](/tests/process_metadata.yaml).
 
 Enabled features include:
 
@@ -44,7 +44,7 @@ data_documentor:
     USLCI: 'Franklin Associates, A Division of ERG'
 ```
 
-- Sources can be generated if made available as [bibtex file](../electricity/electricity.bib),
+- Sources can be generated if made available as [bibtex file](/tests/test.bib),
 using the following syntax, where the bibid is the key and the openLCA name is the value:
 
 ```{yaml}

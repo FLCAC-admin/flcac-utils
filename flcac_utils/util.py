@@ -58,7 +58,8 @@ def increment_dqi_value(s: str, pos: int) -> str:
     dqi = ';'.join(map(str, numbers))
     return f'({dqi})'
 
-def extract_actors_from_process_meta(process_meta: dict
+def extract_actors_from_process_meta(process_meta: dict,
+                                     **kwargs
                                      ) -> (dict, dict):
     """
     Based on a metadata file, for all potential metadata fields which are actors,
@@ -87,7 +88,7 @@ def extract_actors_from_process_meta(process_meta: dict
     actor_objs = {}
     if actor_dict:
         # Extract actors from API, recreate dictionary in correct format
-        actors = read_commons_data(actor_dict)
+        actors = read_commons_data(actor_dict, auth=kwargs.get('auth', False))
         for repo, a_list in actors.items():
             actor_objs = {a.name: a for a in a_list}
     if len(actor_list) != len(actor_objs):
@@ -128,7 +129,7 @@ def extract_sources_from_process_meta(process_meta: dict,
     return process_meta, source_objs
 
 
-def extract_dqsystems(dq_dict: dict) -> dict['str', o.DQSystem]:
+def extract_dqsystems(dq_dict: dict, **kwargs) -> dict['str', o.DQSystem]:
     """
     :param: dq_dict dictionary that takes the form of
         {'Process' : {<repo>: <dq.Name>},
@@ -150,7 +151,7 @@ def extract_dqsystems(dq_dict: dict) -> dict['str', o.DQSystem]:
     #                   'US EPA - Flow Pedigree Matrix']}
     #     }
     # Extract dq_systems from API, recreate dictionary in correct format
-    dqsystems = read_commons_data(api_dict)
+    dqsystems = read_commons_data(api_dict, auth=kwargs.get('auth', False))
     dq_objs = {}
     for repo, dq_list in dqsystems.items():
         for d in dq_list:
@@ -163,7 +164,7 @@ def extract_dqsystems(dq_dict: dict) -> dict['str', o.DQSystem]:
     return dq_objs
 
 
-def extract_flows(flow_dict: dict, add_tags=False) -> dict['str', o.Flow]:
+def extract_flows(flow_dict: dict, add_tags=False, **kwargs) -> dict['str', o.Flow]:
     """
     :param: flow_dict dictionary that takes the form of
         {<repo>: [flow.Name, flow.Name, ...]}
@@ -171,7 +172,7 @@ def extract_flows(flow_dict: dict, add_tags=False) -> dict['str', o.Flow]:
     """
     print('Extracting flows')
     flow_dict = {k: {'FLOWS': v} for k,v in flow_dict.items()}
-    api_flows = read_commons_data(flow_dict)
+    api_flows = read_commons_data(flow_dict, auth=kwargs.get('auth', False))
 
     # rearrange the structure of the dictionary to {name: olca.Flow}
     flow_objs = {}

@@ -183,6 +183,28 @@ def extract_flows(flow_dict: dict, add_tags=False, **kwargs) -> dict['str', o.Fl
             flow_objs[f.name] = f
     return flow_objs
 
+
+def extract_processes(process_dict: dict, to_ref = False, **kwargs
+                      ) -> dict['str', o.Process]:
+    """
+    :param: process_dict dictionary that takes the form of
+        {<repo>: [process.Name, process.Name, ...]}
+    Returns a dictionary of {'process.Name': o.Process}
+    """
+    print('Extracting processes')
+    process_dict = {k: {'PROCESS': v} for k,v in process_dict.items()}
+    api_processes = read_commons_data(process_dict, auth=kwargs.get('auth', False))
+
+    # rearrange the structure of the dictionary to {name: olca.Process}
+    process_objs = {}
+    for repo, p_list in api_processes.items():
+        for p in p_list:
+            if to_ref:
+                p = p.to_ref()
+            process_objs[p.name] = p
+    return process_objs
+
+
 if __name__ == "__main__":
     dq_dict = {'Process': {'Federal LCA Commons Core Database':
                            'US EPA - Process Pedigree Matrix'},

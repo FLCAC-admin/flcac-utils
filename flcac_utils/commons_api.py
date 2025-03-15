@@ -147,17 +147,23 @@ def get_recent_commits(token, group, repo):
     return None
 
 def return_request(owner, repo, object_type = 'PROCESS', **kwargs):
-    base_url = ('https://www.lcacommons.gov/lca-collaboration/'
-                'ws/public/download/json/prepare')
-
     token = kwargs.get('token', None)
-    
-    url = f'{base_url}/{owner}/{repo}?path={object_type}'
-    json_token = urllib.request.urlopen(url).read().decode()
-    # ^^ swap to requests
+
+    url = (f'{commons_base}/'
+           f'ws/public/download/json/prepare/'
+           f'{owner}/{repo}?path={object_type}')
+
+    cookies = {"JSESSIONID": token}
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    resp = requests.get(url, cookies=cookies, headers=headers)
+    json_token = resp.content.decode()
     # URL used to download json once token is identified
     download_url = 'https://www.lcacommons.gov/lca-collaboration/ws/public/download/json'
-    resp = requests.get(url = f'{download_url}/{json_token}')
+    resp = requests.get(url = f'{download_url}/{json_token}', cookies=cookies)
     return resp
 
 def read_json(f, path):

@@ -137,7 +137,7 @@ def make_exchanges(
     exch_lst = []
     for index, row in df.query('ProcessName==@p.name').iterrows():
         e = olca.Exchange()
-        e.flow = flows[row['FlowUUID']]
+        e.flow = flows[row['FlowUUID']].to_ref()
         e.is_quantitative_reference = bool(row['reference'])
         e.is_input = bool(row['IsInput'])
         e.amount = row['amount']
@@ -145,6 +145,8 @@ def make_exchanges(
         e.is_avoided_product = bool(row.get('avoided_product', False))
         e.unit = units.unit_ref(row['unit'])
         # ^^ needs to be a Ref not a str
+        e.flow_property = units.property_ref(row['unit'])
+        # ^^ required when it is not the reference flow property of the flow
         if 'exchange_dqi' in row and p.exchange_dq_system is not None:
             e.dq_entry = row['exchange_dqi']
         if 'default_provider' in row and pd.notna(row['default_provider']):

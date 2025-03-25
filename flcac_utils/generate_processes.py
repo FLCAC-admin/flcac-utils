@@ -390,6 +390,10 @@ def _write_obj(
     """Creates a zip json from dictionary of olca obj e.g. file = 'json.zip'"""
     with zipio.ZipWriter(path / file) as W:
         for x in obj.values():
+            if x.last_change is None:
+                x.last_change = datetime.datetime.utcnow().isoformat() + 'Z'
+            if x.version is None:
+                x.version = '00.00.001'
             W.write(x)
 
 

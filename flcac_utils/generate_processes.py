@@ -115,6 +115,18 @@ def get_process_metadata(p: olca.Process,
                 else:
                     print(f'Actor: `{v}` not found!')
                     continue
+        elif k in ('reviews'):
+            rev_list = []
+            for i, r in v.items():
+                rev = olca.Review(review_type = r.get('reviewType'),
+                                  details = r.get('details'),
+                                  )
+                if 'report' in r:
+                    report = list(r['report'].values())[0]
+                    s = kwargs.get('source_objs').get(report).to_ref()
+                    rev.report = s
+            rev_list.append(rev)
+            v = rev_list
         setattr(pdoc, k, v)
     if 'creation_date' not in metadata.keys():
         pdoc.creation_date = datetime.datetime.now().isoformat(timespec='seconds')

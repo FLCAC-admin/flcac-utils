@@ -161,7 +161,8 @@ def make_exchanges(
         # ^^ required when it is not the reference flow property of the flow
         if 'exchange_dqi' in row and p.exchange_dq_system is not None:
             e.dq_entry = row['exchange_dqi']
-        if 'default_provider' in row and pd.notna(row['default_provider']):
+        if 'default_provider' in row and (pd.notna(row['default_provider']) and
+                                          row['default_provider'] != ''):
             # Requires identifying the UUID of the default provider, but
             # TODO then how do you assign a provider from wihtin the new data?
             dp = olca.Process()
@@ -176,7 +177,7 @@ def make_exchanges(
             #     dp.id = row['default_provider']
             # else:
             #     print('WARNING: ambiguous default provider')
-            e.default_provider = dp
+            e.default_provider = dp.to_ref()
         exch_lst.append(e)
     p.exchanges = exch_lst
 

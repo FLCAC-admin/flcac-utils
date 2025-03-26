@@ -17,4 +17,4 @@
 | location        | str   | N        | process level location code |
 | avoided_product | bool  | N        | avoided_product = `True` |
 | description     | str   | N        | description for the exchange |
-| exchange_dqi    | str   | N        | comma separated values for flow level dqi |
+| exchange_dqi    | str   | N        | semi-colon separated values for flow level dqi |

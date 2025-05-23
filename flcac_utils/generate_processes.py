@@ -123,7 +123,8 @@ def get_process_metadata(p: olca.Process,
                                   )
                 if 'report' in r:
                     report = list(r['report'].values())[0]
-                    s = kwargs.get('source_objs').get(report).to_ref()
+                    s = kwargs.get('source_objs')
+                    s = s.get(report).to_ref() if s else None
                     rev.report = s
             rev_list.append(rev)
             v = rev_list

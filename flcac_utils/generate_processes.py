@@ -337,8 +337,10 @@ def build_process_dict(df: pd.DataFrame,
                 p0.location = loc.to_ref()
 
         if kwargs.get('dq_objs'):
-            p0.dq_system = kwargs['dq_objs'].get('Process').to_ref()
-            p0.exchange_dq_system = kwargs['dq_objs'].get('Flow').to_ref()
+            dq = kwargs['dq_objs'].get('Process')
+            p0.dq_system = dq.to_ref() if dq else None
+            dq = kwargs['dq_objs'].get('Flow')
+            p0.exchange_dq_system = dq.to_ref() if dq else None
 
         # print('Creating Metadata for Process', p)
         p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)

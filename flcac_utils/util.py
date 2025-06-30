@@ -155,9 +155,9 @@ def extract_dqsystems(dq_dict: dict, **kwargs) -> dict['str', o.DQSystem]:
     dq_objs = {}
     for repo, dq_list in dqsystems.items():
         for d in dq_list:
-            if d.name == dq_dict.get('Process').get(repo):
+            if d.name == dq_dict.get('Process', {}).get(repo):
                 dq_objs['Process'] = d
-            if d.name == dq_dict.get('Flow').get(repo):
+            if d.name == dq_dict.get('Flow', {}).get(repo):
                 dq_objs['Flow'] = d
     # if len(dq_list) != len(dq_objs):
     #     print('WARNING: not all actors found')

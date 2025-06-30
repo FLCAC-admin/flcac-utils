@@ -41,6 +41,10 @@ Woody Biomass:
   owner: 'US_Forest_Service_Forest_Products_Lab'
   repo: 'Woody_biomass'
 
+Construction Materials:
+  owner: 'NIST'
+  repo: 'construction_materials'
+
 CED Method:
   owner: 'Federal_LCA_Commons'
   repo: 'CED_Method'

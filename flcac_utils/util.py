@@ -124,7 +124,13 @@ def extract_sources_from_process_meta(process_meta: dict,
         bib_path = bib_path,
         bibids = all_source_dict)
     # rearrange the structure of the dictionary to {name: olca.Source}
-    source_objs = {k.name: k for k in source_list}
+    source_objs = {}
+    for k in source_list:
+        if k.year == '':
+            # esupy assigns blank when it needs to be None due to int type
+            # see #3, consider direct fix in esupy
+            k.year = None
+        source_objs[k.name] = k
 
     return process_meta, source_objs
 

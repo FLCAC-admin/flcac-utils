@@ -14,7 +14,7 @@
 | default_provider| str   | N        | UUID of the default provider for technosphere flows |
 | amount          | float | Y        | Exchange amount |
 | unit            | str   | Y        | Unit  |
-| location        | str   | N        | process level location code |
+| location        | str   | N        | process level location code, for countries this should be 2-digit code, e.g. `US` |
 | avoided_product | bool  | N        | avoided_product = `True` |
 | description     | str   | N        | description for the exchange |
 | exchange_dqi    | str   | N        | semi-colon separated values for flow level dqi |

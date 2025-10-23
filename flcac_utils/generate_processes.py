@@ -5,7 +5,7 @@
 import olca_schema as olca
 import olca_schema.zipio as zipio #for writing to json
 import olca_schema.units as units
-import datetime
+from datetime import datetime, time
 import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
@@ -52,7 +52,9 @@ def _set_base_attributes(
     if entity.name is None:
         entity.name = name
     #entity.version = '00.00.001'
-    entity.last_change = datetime.datetime.utcnow().isoformat() + 'Z'
+    # set to noon local time
+    entity.last_change = (datetime.combine(
+        datetime.utcnow().date(), time(12)).isoformat() + 'Z')
     return entity
 
 
@@ -130,7 +132,9 @@ def get_process_metadata(p: olca.Process,
             v = rev_list
         setattr(pdoc, k, v)
     if 'creation_date' not in metadata.keys():
-        pdoc.creation_date = datetime.datetime.now().isoformat(timespec='seconds')
+        # Set to noon local time
+        pdoc.creation_date = (datetime.combine(datetime.now().date(), time(12))
+                              .isoformat(timespec='seconds'))
     p.process_documentation = pdoc
     return p
 
@@ -395,7 +399,8 @@ def _write_obj(
     with zipio.ZipWriter(path / file) as W:
         for x in obj.values():
             if x.last_change is None:
-                x.last_change = datetime.datetime.utcnow().isoformat() + 'Z'
+                x.last_change = (datetime.combine(
+                    datetime.utcnow().date(), time(12)).isoformat() + 'Z')
             if x.version is None:
                 x.version = '00.00.001'
             W.write(x)
@@ -436,7 +441,7 @@ def write_objects(name: str,
     # Select "Update data sets with newer versions" to replace any created flows
     # and processes, but not any exisiting technosphere flows
     
-    timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestr = datetime.now().strftime("%Y%m%d-%H%M%S")
     json_file = f'{name}_olca2.0_{timestr}.zip'
     
     # Remove existing json (otherwise it gets extended)

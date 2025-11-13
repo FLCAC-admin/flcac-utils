@@ -3,6 +3,7 @@ Supporting functions
 """
 
 import datetime
+import math
 import pandas as pd
 from pathlib import Path
 import olca_schema as o
@@ -209,6 +210,33 @@ def extract_processes(process_dict: dict, to_ref = False, **kwargs
                 p = p.to_ref()
             process_objs[p.name] = p
     return process_objs
+
+
+def round_to_sig_figs(number, sig_figs):
+    """
+    Rounds a number to a specified number of significant figures.
+
+    Args:
+        number (float or int): The number to round.
+        sig_figs (int): The desired number of significant figures.
+
+    Returns:
+        float: The number rounded to the specified significant figures.
+    """
+    if number == 0:
+        return 0.0  # Handle zero separately
+
+    # Calculate the order of magnitude
+    magnitude = int(math.floor(math.log10(abs(number))))
+
+    # Determine the rounding position relative to the decimal point
+    # For example, if sig_figs is 3 and magnitude is 2 (e.g., for 1234),
+    # then we want to round to -1 decimal places (tens place)
+    # If magnitude is -2 (e.g., for 0.00123), and sig_figs is 3,
+    # then we want to round to 1 decimal place (thousands place)
+    decimal_places = sig_figs - 1 - magnitude
+
+    return round(number, decimal_places)
 
 
 if __name__ == "__main__":

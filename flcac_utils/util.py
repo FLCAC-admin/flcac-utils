@@ -14,8 +14,8 @@ from flcac_utils.commons_api import read_commons_data
 
 
 def assign_year_to_meta(meta, year):
-    meta['valid_from'] = datetime.datetime(year, 1, 1).isoformat(timespec='seconds')
-    meta['valid_until'] = datetime.datetime(year, 12, 31).isoformat(timespec='seconds')
+    meta['valid_from'] = datetime.datetime(int(year), 1, 1).isoformat(timespec='seconds')
+    meta['valid_until'] = datetime.datetime(int(year), 12, 31).isoformat(timespec='seconds')
     return meta
 
 def format_dqi_score(dqi_dict):

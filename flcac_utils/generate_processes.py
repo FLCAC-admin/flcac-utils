@@ -47,7 +47,7 @@ def _set_base_attributes(
         name: str
         ):
     """Sets base attributes for new flows."""
-    if entity.id == '':
+    if (entity.id is None) or (entity.id == ''):
         entity.id = make_uuid(name)
     if entity.name is None:
         entity.name = name

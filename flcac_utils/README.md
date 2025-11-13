@@ -37,11 +37,16 @@ Process metadata is written in yaml, an example can be found for [electricity](/
 Enabled features include:
 
 - Actors can be referenced and assigned directly from the commons via the API using
-the following syntax in the metadata file, where the key is the repo, and the values is the object name:
+the following syntax in the metadata file, where the key is the repo, and the values is the object name.
+To create a new actor object, use the key `_NEW`
 
 ```{yaml}
 data_documentor:
-    USLCI: 'Franklin Associates, A Division of ERG'
+    USLCI: 'ERG'
+    _NEW:
+        name: 'Actor Name'
+        email: ''
+        description: ''
 ```
 
 - Sources can be generated if made available as [bibtex file](/tests/test.bib),

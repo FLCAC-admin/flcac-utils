@@ -10,6 +10,7 @@ import olca_schema as o
 import esupy.bibtex
 from esupy.location import extract_coordinates
 from flcac_utils.commons_api import read_commons_data
+from flcac_utils.generate_processes import _set_base_attributes
 
 
 
@@ -66,17 +67,31 @@ def extract_actors_from_process_meta(process_meta: dict,
     Based on a metadata file, for all potential metadata fields which are actors,
     extract the actors by name via API calls.
     Metadata fields must be in the format of {'Repo label': 'Actor.name'}
+    To generate a new actor object use the key "_NEW"
     Process metadata file is modified and returned to leave only the actor name
 
     Returns a dictionary of {'Actor.name': olca.Actor}
     """
     print('Identifying actors from metadata')
     actor_list = []
+    new_actors = []
     for field in ('data_set_owner', 'data_generator', 'data_documentor'):
         actor_dict = process_meta.get(field, '')
-        if type(actor_dict) == dict:
-            actor_list.append(actor_dict.copy())
+        if (type(actor_dict) == dict) and (list(actor_dict.keys())[0] == "_NEW"):
+            d = list(actor_dict.values())[0]
+            if d not in new_actors:
+                new_actors.append(d)
+            process_meta[field] = d.get('name')
+        elif type(actor_dict) == dict:
+            d = actor_dict.copy()
+            if d not in actor_list:
+                actor_list.append(d)
             process_meta[field] = list(actor_dict.values())[0]
+        else:
+            raise ValueError(" ".join([
+                f"{field} must be a dictionary. For new actors, assign the ",
+                "key as '_NEW'"])
+                )
     actor_dict = {}
     for a in actor_list:
         # Reformat all identified actors by repository into a list
@@ -94,6 +109,11 @@ def extract_actors_from_process_meta(process_meta: dict,
             actor_objs = {a.name: a for a in a_list}
     if len(actor_list) != len(actor_objs):
         print('WARNING: not all actors found')
+    # Generate and append new actor objs
+    for d in new_actors:
+        a = o.Actor.from_dict(d)
+        a = _set_base_attributes(a, name=a.name)
+        actor_objs[d.get('name')] = a
     return process_meta, actor_objs
 
 

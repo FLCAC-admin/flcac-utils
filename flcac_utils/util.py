@@ -11,7 +11,7 @@ import esupy.bibtex
 from esupy.location import extract_coordinates
 from flcac_utils.commons_api import read_commons_data
 from flcac_utils.generate_processes import _set_base_attributes
-
+import zipfile
 
 
 def assign_year_to_meta(meta, year):
@@ -273,3 +273,61 @@ if __name__ == "__main__":
                                'Gasoline; dispensed at pump']}
                     }
     flow_dict = extract_flows(flow_dict)
+
+
+def extract_latest_zip(
+    fpath_zip: Path,
+    working_dir: Path,
+    output_folder_name: str | None = None,
+    overwrite: bool = True
+) -> Path:
+    """
+    Extract the most recently created ZIP file from a directory (or a single ZIP file),
+    delete the ZIP after extraction, and place the output inside `working_dir`.
+
+    Args:
+        fpath_zip (Path): Path to a ZIP file or a directory containing ZIP files.
+        working_dir (Path): Main working directory where extracted files will be placed.
+        output_folder_name (str | None): Optional name for the output folder. Defaults to ZIP name.
+        overwrite (bool): Whether to overwrite existing files. Defaults to True.
+
+    Returns:
+        Path: Path to the directory where files were extracted.
+    """
+    if not fpath_zip.exists():
+        raise FileNotFoundError(f"Path not found: {fpath_zip}")
+
+    if not working_dir.exists():
+        working_dir.mkdir(parents=True)
+
+    # Determine the ZIP file to extract
+    if fpath_zip.is_dir():
+        zip_files = list(fpath_zip.glob("*.zip"))
+        if not zip_files:
+            raise FileNotFoundError(f"No ZIP files found in directory: {fpath_zip}")
+        latest_zip = max(zip_files, key=lambda z: z.stat().st_ctime)
+    else:
+        latest_zip = fpath_zip
+
+    # Decide output folder name
+    if output_folder_name:
+        output_folder = working_dir / output_folder_name
+    else:
+        output_folder = working_dir / latest_zip.stem
+
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(latest_zip, 'r') as archive:
+            if not overwrite:
+                existing_files = [output_folder / name for name in archive.namelist() if (output_folder / name).exists()]
+                if existing_files:
+                    print(f"Skipping extraction; files already exist: {existing_files}")
+                    return output_folder
+            archive.extractall(output_folder)
+    except zipfile.BadZipFile:
+        raise ValueError(f"Invalid ZIP file: {latest_zip}")
+
+    latest_zip.unlink()
+    print(f"Extracted files from {latest_zip.name} to {output_folder}")
+    return output_folder

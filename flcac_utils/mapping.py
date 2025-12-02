@@ -104,6 +104,25 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
             return ''
 
     df = (df
+        ## Handle bridge processes
+           .assign(bridge = lambda x: np.where(cond,
+               x['name'].map(
+                   {k: True for k, v in flow_dict.items()
+                    if v.get('BRIDGE', False)}),
+               False))
+           .assign(repo = lambda x: np.where(cond,
+               x['name'].map(
+                   {k: list(v['repo'].keys())[0] for k, v in flow_dict.items()
+                    if v.get('BRIDGE', False)}),
+               ''))
+           .assign(target_name = lambda x: np.where(cond,
+               x['name'].map(
+                   {k: v['target_name'] for k, v in flow_dict.items()
+                    if v.get('BRIDGE', False)}),
+               ''))
+           )
+
+    df = (df
           ## Flow mapping and conversions
           .assign(FlowUUID = lambda x: np.where(cond,
                 x['name'].map(
@@ -117,15 +136,19 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
                 x['name'].map(
                     {k: get_context(v['target_name']) for k, v in flow_dict.items()}),
                 x['Context']))
-           .assign(unit = lambda x: np.where(cond, 
+          )
+    cond2 = cond * (df['bridge'] != True)
+    df = (df
+          ## Some modifications don't apply to flows that are bridged
+           .assign(unit = lambda x: np.where(cond2, 
                 x['name'].map(
                     {k: v.get('unit') for k, v in flow_dict.items()}),
                 x['unit']))
-           .assign(conversion = lambda x: np.where(cond, 
+           .assign(conversion = lambda x: np.where(cond2, 
                 x['name'].map(
                     {k: v.get('conversion', 1) for k, v in flow_dict.items()}),
                 1))
-           .assign(Flowamount = lambda x: x['amount'] * x['conversion'])
+           .assign(amount = lambda x: x['amount'] * x['conversion'])
 
         ## Handle default providers
            .assign(default_provider_process = lambda x: np.where(cond,
@@ -137,21 +160,20 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
                 x['default_provider_process'].map(
                     {k: v.id for k, v in provider_dict.items()}),
                 ''))
-
-        ## Handle bridge processes
-           .assign(bridge = lambda x: np.where(cond,
-               x['name'].map(
-                   {k: True for k, v in flow_dict.items()
-                    if v.get('BRIDGE', False)}),
-               False))
-           .assign(repo = lambda x: np.where(cond,
-               x['name'].map(
-                   {k: list(v['repo'].keys())[0] for k, v in flow_dict.items()
-                    if v.get('BRIDGE', False)}),
-               ''))
            )
 
-    return df
+    df = (df
+          ## Make some special adjustments to providers for bridge flows
+           .assign(default_provider_process = lambda x: np.where(x['bridge'] == True,
+                x.apply(
+                    lambda z: create_bridge_name(z['repo'], z['target_name']), axis=1),
+                x['default_provider_process']))
+           .assign(default_provider = lambda x: np.where(x['bridge'] == True,
+                x['default_provider_process'].apply(make_uuid),
+                x['default_provider']))
+           )
+
+    return df.drop(columns=['conversion'])
 
 def create_bridge_name(repo, flowname):
     if repo == 'USLCI':
@@ -174,12 +196,14 @@ def create_bridge_processes(df, flow_dict, flow_objs):
     df_bridge = (df
                  .query('bridge == True')
                  .drop_duplicates(subset = 'FlowName')
+                 .drop(columns=['default_provider', 'default_provider_process'], errors='ignore')
                  .reset_index(drop=True)
                  .assign(amount = 1)
                  .assign(ProcessCategory = lambda x: x.apply(
-                     lambda z: create_bridge_category(z['repo'], z['FlowName']), axis=1))
+                     lambda z: create_bridge_category(z['repo'], z['target_name']), axis=1))
                  .assign(ProcessName = lambda x: x.apply(
-                     lambda z: create_bridge_name(z['repo'], z['FlowName']), axis=1))
+                     lambda z: create_bridge_name(z['repo'], z['target_name']), axis=1))
+                 .assign(FlowName = lambda x: x['target_name'])
                  .assign(ProcessID = lambda x: x['ProcessName'].apply(make_uuid))
                  # ^ need more args passed to UUID to avoid duplicates?
                  )
@@ -191,7 +215,7 @@ def create_bridge_processes(df, flow_dict, flow_objs):
             # ^ first chunk is for new flows
             df_bridge
                .assign(FlowName = lambda x: x['name'].map(
-                   {k: v.get('target_name', 'ERROR') for k, v in flow_dict1.items()}))
+                   {k: v.get('name', 'ERROR') for k, v in flow_dict1.items()}))
                .assign(FlowUUID = lambda x: x['name'].map(
                    {k: flow_objs.get(v['name']).id for k, v in flow_dict1.items()}))
                .assign(unit = lambda x: x['name'].map(

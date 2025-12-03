@@ -33,6 +33,12 @@ metadata_keys = [
     ]
 
 metadata_match = {
+    'Time Start Date': 'valid_from',
+    'Time End Date': 'valid_until',
+    'LCI Method': 'inventory_method_description',
+    'Data Completeness': 'completeness_description',
+    'Sampling Procedure': 'sampling_description',
+    'Access and Use Restrictions': 'use_advice',
     }
 
 def read_tabular_metadata(df) -> dict:
@@ -50,13 +56,20 @@ def read_tabular_metadata(df) -> dict:
 
     # Create mapping of row index names to target metadata keys
     mapping = {}
+    missing_list = []
     for index in df.index:
         norm_row = normalize(index)
         for key in metadata_keys:
             if normalize(key) == norm_row:
                 mapping[index] = key
+                break
             elif normalize(key).replace(' description', '') == norm_row:
                 mapping[index] = key
+                break
+        else:
+            missing_list.append(index)
+
+    mapping.update(**metadata_match)
 
     # Build dictionary of dictionaries
     d = {}

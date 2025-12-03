@@ -14,9 +14,9 @@ from flcac_utils.generate_processes import _set_base_attributes
 import zipfile
 
 
-def assign_year_to_meta(meta, year):
-    meta['valid_from'] = datetime.datetime(int(year), 1, 1).isoformat(timespec='seconds')
-    meta['valid_until'] = datetime.datetime(int(year), 12, 31).isoformat(timespec='seconds')
+def assign_year_to_meta(meta, year1, year2=None):
+    meta['valid_from'] = datetime.datetime(int(year1), 1, 1).isoformat(timespec='seconds')
+    meta['valid_until'] = datetime.datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
     return meta
 
 def format_dqi_score(dqi_dict):

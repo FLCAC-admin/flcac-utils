@@ -279,11 +279,12 @@ def extract_latest_zip(
     fpath_zip: Path,
     working_dir: Path,
     output_folder_name: str | None = None,
-    overwrite: bool = True
+    overwrite: bool = True,
+    delete_zip: bool = False,
 ) -> Path:
     """
     Extract the most recently created ZIP file from a directory (or a single ZIP file),
-    delete the ZIP after extraction, and place the output inside `working_dir`.
+    (optionally) delete the ZIP after extraction, and place the output inside `working_dir`.
 
     Args:
         fpath_zip (Path): Path to a ZIP file or a directory containing ZIP files.
@@ -328,6 +329,8 @@ def extract_latest_zip(
     except zipfile.BadZipFile:
         raise ValueError(f"Invalid ZIP file: {latest_zip}")
 
-    latest_zip.unlink()
+    if delete_zip:
+        latest_zip.unlink()
+
     print(f"Extracted files from {latest_zip.name} to {output_folder}")
     return output_folder

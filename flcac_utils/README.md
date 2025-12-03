@@ -3,6 +3,9 @@
 The general sequence to building objects is:
 
 ```{python}
+# Read in the exchange table
+df_olca = pd.read_csv('my_exchange_table.csv')
+
 # Extract the process metadata input file
 with open('metadata.yaml') as f:
     process_meta = yaml.safe_load(f)
@@ -35,6 +38,44 @@ The input dataframe `df_olca` should conform to the exchange and process table [
 Process metadata is written in yaml, an example can be found for [electricity](/tests/process_metadata.yaml).
 
 Enabled features include:
+
+- If needed, apply [elementary flow mapping using esupy](https://github.com/USEPA/esupy/blob/main/esupy/mapping.py))
+
+```{python}
+kwargs = {}
+kwargs['material_crosswalk'] = (parent_path / 'elementary_mapping.csv')
+## ^^ hack to pass a local mapping file
+
+mapped_df = apply_flow_mapping(
+    df=df, source=None, flow_type='ELEMENTARY_FLOW',
+    keep_unmapped_rows=True, ignore_source_name=True,
+    field_dict = {
+        'SourceName': '',
+        'FlowableName': 'FlowName',
+        'FlowableUnit': 'unit',
+        'FlowableContext': 'Context',
+        'FlowableQuantity': 'amount',
+        'UUID': 'FlowUUID'},
+    **kwargs
+    )
+```
+- If needed, apply technosphere flow mapping using a mapping file per the
+[format specs](/format_specs/tech_mapping.md).
+Bridge processes can be generated using `build_process_dict()` and written alongside
+other objects in `write_objects()`
+
+```{python}
+from flcac_utils.mapping import prepare_tech_flow_mappings
+
+## Identify mappings for technosphere flows
+flow_dict, flow_objs, provider_dict = prepare_tech_flow_mappings(
+    pd.read_csv(parent_path / 'tech_mapping.csv'), auth=False)
+
+#%% Apply tech flow mapping
+from flcac_utils.mapping import apply_tech_flow_mapping, create_bridge_processes
+df_olca = apply_tech_flow_mapping(df_olca, flow_dict, flow_objs, provider_dict)
+df_bridge = create_bridge_processes(df_olca, flow_dict, flow_objs)
+```
 
 - Actors can be referenced and assigned directly from the commons via the API using
 the following syntax in the metadata file, where the key is the repo, and the values is the object name.

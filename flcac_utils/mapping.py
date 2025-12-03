@@ -126,15 +126,16 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
           ## Flow mapping and conversions
           .assign(FlowUUID = lambda x: np.where(cond,
                 x['name'].map(
-                    {k: v['id'] for k, v in flow_dict.items()}), 
+                    {k: v['id'] for k, v in flow_dict.items()}).fillna(x['FlowUUID']),
                 x['FlowUUID']))
           .assign(FlowName = lambda x: np.where(cond,
                 x['name'].map(
-                    {k: v['name'] for k, v in flow_dict.items()}),
+                    {k: v['name'] for k, v in flow_dict.items()}).fillna(x['name']),
                 x['name']))
           .assign(Context = lambda x: np.where(cond,
                 x['name'].map(
-                    {k: get_context(v['target_name']) for k, v in flow_dict.items()}),
+                    {k: get_context(v['target_name']) for k, v in flow_dict.items()})
+                    .fillna(x['Context']),
                 x['Context']))
           )
     cond2 = cond * (df['bridge'] != True)
@@ -142,11 +143,12 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
           ## Some modifications don't apply to flows that are bridged
            .assign(unit = lambda x: np.where(cond2, 
                 x['name'].map(
-                    {k: v.get('unit') for k, v in flow_dict.items()}),
+                    {k: v.get('unit') for k, v in flow_dict.items()}).fillna(x['unit']),
                 x['unit']))
            .assign(conversion = lambda x: np.where(cond2, 
                 x['name'].map(
-                    {k: v.get('conversion', 1) for k, v in flow_dict.items()}),
+                    {k: v.get('conversion', 1) for k, v in flow_dict.items()})
+                    .fillna(1),
                 1))
            .assign(amount = lambda x: x['amount'] * x['conversion'])
 

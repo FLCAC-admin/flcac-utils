@@ -13,8 +13,8 @@
 | TargetFlowName    | str   | Y        | Target flow name, must match flow name exactly for existing flows                    |
 | TargetUnit        | str   | Y        |                                                                                      |
 | Provider          |       |          | Process Name of default provider if desired, if Bridge is `True`, this is not needed |
-| Bridge            | bool  | N        | If `True`, will create a bridge process from BridgeFlowName to TargetFlowName        |
-| BridgeFlowName    | str   | N        |                                                                                      |
+| Bridge            | bool  | N        | If `True`, will create an intermediary bridge process from BridgeFlowName to TargetFlowName        |
+| BridgeFlowName    | str   | N        | Required if Bridge is `True`; new flow name                                                                                     |
 | Mapper            |       | N        |                                                                                      |
 | Verifier          |       | N        |                                                                                      |
 | LastUpdated       |       | N        |                                                                                      |

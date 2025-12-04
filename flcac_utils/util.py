@@ -14,9 +14,9 @@ from flcac_utils.generate_processes import _set_base_attributes
 import zipfile
 
 
-def assign_year_to_meta(meta, year):
-    meta['valid_from'] = datetime.datetime(int(year), 1, 1).isoformat(timespec='seconds')
-    meta['valid_until'] = datetime.datetime(int(year), 12, 31).isoformat(timespec='seconds')
+def assign_year_to_meta(meta, year1, year2=None):
+    meta['valid_from'] = datetime.datetime(int(year1), 1, 1).isoformat(timespec='seconds')
+    meta['valid_until'] = datetime.datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
     return meta
 
 def format_dqi_score(dqi_dict):
@@ -77,7 +77,9 @@ def extract_actors_from_process_meta(process_meta: dict,
     new_actors = []
     for field in ('data_set_owner', 'data_generator', 'data_documentor'):
         actor_dict = process_meta.get(field, '')
-        if (type(actor_dict) == dict) and (list(actor_dict.keys())[0] == "_NEW"):
+        if actor_dict == '':
+            continue
+        elif (type(actor_dict) == dict) and (list(actor_dict.keys())[0] == "_NEW"):
             d = list(actor_dict.values())[0]
             if d not in new_actors:
                 new_actors.append(d)

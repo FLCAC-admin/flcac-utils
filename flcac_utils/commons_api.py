@@ -146,6 +146,37 @@ def get_recent_commits(token, group, repo):
     print("Could not find commit hash in any endpoint")
     return None
 
+
+def get_single_object(repo, object_type, refId, auth=False):
+    """Acquires a single olca object of type object_type based on the UUID (refId)
+    """
+    token = login() if auth else None
+    config = get_config()
+    repo_data = config.get(repo)
+    if not repo_data:
+        raise ValueError(f'{repo} not found in config!')
+    d = _get_object(owner = repo_data.get('owner'),
+                    repo = repo_data.get('repo'),
+                    object_type = object_type,
+                    refId = refId,
+                    token = token)
+    olca_class = getattr(olca, d['@type'])
+    f = olca_class.from_dict(d)
+    return f
+
+def _get_object(owner, repo, object_type, refId, token):
+    url = (f'{commons_base}/'
+           f'ws/public/browse/{owner}/{repo}/{object_type}/{refId}')
+    cookies = {"JSESSIONID": token}
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    resp = requests.get(url, cookies=cookies, headers=headers)
+    json = resp.json()
+    return json
+
 def return_request(owner, repo, object_type = 'PROCESS', **kwargs):
     token = kwargs.get('token', None)
 
@@ -279,3 +310,5 @@ if __name__ == '__main__':
         'CED Method': 'IMPACT_METHOD',
         }
     data_dict = read_commons_data(object_dict, auth=False)
+    flow = get_single_object('Forestry and Forest Products', 'FLOW',
+                             '209abd9b-df20-39e2-a366-63b360e896bf')

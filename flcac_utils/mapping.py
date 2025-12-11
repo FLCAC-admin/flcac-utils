@@ -162,6 +162,16 @@ def apply_tech_flow_mapping(df, flow_dict, flow_objs, provider_dict, cond=None) 
                 ''))
            )
 
+    ## when the provider is a newly created process, assign that here
+    cond3 = (cond * (df['default_provider'].isna()) * 
+             (df['default_provider_process'].isin(df['ProcessName'])))
+    df = (df
+           .assign(default_provider = lambda x: np.where(cond3,
+                x['default_provider_process'].map(
+                    dict(zip(df['ProcessName'], df['ProcessID']))),
+                x['default_provider']))
+           )
+
     df = (df
           ## Make some special adjustments to providers for bridge flows
            .assign(default_provider_process = lambda x: np.where(x['bridge'] == True,
@@ -196,6 +206,8 @@ def create_bridge_category(repo, flowname):
 def create_bridge_processes(df, flow_dict, flow_objs):
     """ Builds bridge processes to facilitate technosphere flow mapping"""
     flow_dict1 = {k: v for k, v in flow_dict.items() if v.get('BRIDGE', False)}
+    if 'bridge' not in df:
+        return pd.DataFrame()
     if len(df.query('bridge == True')) == 0:
         return pd.DataFrame()
     df_bridge = (df

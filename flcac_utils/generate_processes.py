@@ -198,7 +198,7 @@ def build_flow_dict(df: pd.DataFrame,
 
     :param df: DataFrame of process and exchange data; see exchange_schema
     :param tech_flows_df: DataFrame (optional), provide in order to link to existing
-        technosphere flows. DataFrame must contain "FlowUUID" and "FlowName"
+        technosphere flows. DataFrame must contain "UUID" and "FlowName"
     :return: 1) dict of olca.Flow objects with UUID as dictionary key
              2) list of FlowUUIDs (keys) which align with those Flow objects
                 that need to be written to JSON.

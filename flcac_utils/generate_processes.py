@@ -6,6 +6,7 @@ import olca_schema as olca
 import olca_schema.zipio as zipio #for writing to json
 import olca_schema.units as units
 from datetime import datetime, time
+from typing import List
 import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
@@ -27,7 +28,7 @@ exchange_schema = {
     "IsInput": {'dtype': 'bool', 'required': True},
     "FlowType": {'dtype': 'str', 'required': True},
     "reference":  {'dtype': 'bool', 'required': True},
-    "default_provider": {'dtype': 'bool', 'required': False},
+    "default_provider": {'dtype': 'str', 'required': False},
     "description": {'dtype': 'str', 'required': False},
     "amount":  {'dtype': 'float', 'required': True},
     "unit":  {'dtype': 'str', 'required': True},
@@ -75,6 +76,31 @@ def validate_exchange_data(df):
     if keys:
         raise ValueError('Incorrect units present in exchange data: ',
                          f'{", ".join(keys)}')
+    names = validate_reference_default_provider(df)
+    if names:
+        raise ValueError('Default provider entered for reference flow in processes: ',
+                         names)
+
+def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
+    """
+    Return a list of violations where:
+      - reference is True
+      - default_provider exists and is filled (not NaN, not empty, not whitespace)
+    """
+    # Normalize the 'reference' column to booleans
+    ref_true = df['reference'].fillna(False).astype(bool)
+
+    # Build a "filled" mask for default_provider only if the column exists
+    if 'default_provider' in df.columns:
+        # Convert to string where notna, strip whitespace, then check non-empty
+        dp = df['default_provider']
+        dp_filled = dp.notna() & (dp.astype(str).str.strip() != "")
+    else:
+        # Column missing => considered not filled for all rows
+        dp_filled = pd.Series(False, index=df.index)
+
+    violations_mask = ref_true & dp_filled
+    return df.loc[violations_mask, 'ProcessName'].astype(str).tolist()
 
 
 def get_process_metadata(p: olca.Process,

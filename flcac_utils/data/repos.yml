@@ -49,6 +49,14 @@ Construction Materials:
   owner: 'NIST'
   repo: 'construction_materials'
 
+Building Systems:
+  owner: 'NIST'
+  repo: 'Building_Systems'
+
+USEEIO:
+  owner: 'US_Environmental_Protection_Agency'
+  repo: 'USEEIO_v2'
+
 CED Method:
   owner: 'Federal_LCA_Commons'
   repo: 'CED_Method'

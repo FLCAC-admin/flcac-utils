@@ -9,7 +9,7 @@ from pathlib import Path
 import olca_schema as o
 import esupy.bibtex
 from esupy.location import extract_coordinates
-from flcac_utils.commons_api import read_commons_data
+from flcac_utils.commons_api import read_commons_data, get_single_object
 from flcac_utils.generate_processes import _set_base_attributes
 import zipfile
 
@@ -232,6 +232,23 @@ def extract_processes(process_dict: dict, to_ref = False, **kwargs
                 p = p.to_ref()
             process_objs[p.name] = p
     return process_objs
+
+def extract_bridge_process(tgt_name, repo):
+    """
+    Special handling of using exisiting bridge process in another repo.
+    Extracts the bridge process object and the input flow object
+
+    :param: tgt_name str name of the bridge process
+    :param: repo str name of the source repo
+    Returns a tuple of the o.Process, o.Flow
+    """
+    b = extract_processes({repo: tgt_name}, to_ref=False, auth=False)
+    for e in b[tgt_name].exchanges:
+        if e.is_input:
+            input_flow = e.flow.id
+            break
+    f = get_single_object(repo, 'FLOW', input_flow)
+    return (b,f)
 
 
 def round_to_sig_figs(number, sig_figs):

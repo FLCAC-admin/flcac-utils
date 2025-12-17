@@ -6,7 +6,7 @@ import olca_schema as olca
 import olca_schema.zipio as zipio #for writing to json
 import olca_schema.units as units
 from datetime import datetime, time
-from typing import List
+from typing import List, Any
 import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
@@ -24,6 +24,7 @@ exchange_schema = {
     "ProcessName": {'dtype': 'str', 'required': True},
     "FlowUUID": {'dtype': 'str', 'required': True},
     "FlowName": {'dtype': 'str', 'required': True},
+    "amountFormula": {'dtype': 'str', 'required': False},
     "Context":  {'dtype': 'str', 'required': True},
     "IsInput": {'dtype': 'bool', 'required': True},
     "FlowType": {'dtype': 'str', 'required': True},
@@ -35,6 +36,20 @@ exchange_schema = {
     "avoided_product": {'dtype': 'bool', 'required': False},
     "exchange_dqi": {'dtype': 'str', 'required': False},
     # "tag": {'dtype': 'str', 'required': False}
+}
+
+'''
+Parameter dictionary schema fields. Parameter dictionaries are stored in 
+in a list named 'parameters' within each process dictionary. 
+'''
+param_schema ={
+    'processName': {'dtype': 'str', 'required': True},
+    'independent': {'dtype': 'bool', 'required': True}, # independent = T / dependent = F
+    'formula': {'dtype': 'str', 'required': False}, # Required if dependent
+    'isInputParameter': {'dtype': 'bool', 'required': True}, # True if used in inputs; False if used in outputs
+    'name': {'dtype': 'str', 'required': True}, # (string) unique identifier; reference to connect to exchange
+    'value': {'dtype': 'float', 'required': False}, 
+    'description': {'dtype': 'str', 'required': False},
 }
 
 # convert units to units in olca_schema.units
@@ -102,12 +117,37 @@ def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     violations_mask = ref_true & dp_filled
     return df.loc[violations_mask, 'ProcessName'].astype(str).tolist()
 
+def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
+    """
+    Get all entries for a single process from df_params. Convert rows into a
+    dictionary. Convert dictionary into an olca parameter object. Append 
+    parameter object to a list and return list.
+    
+    The list of parameter objects is apped to an olca process object.
+    """
+    # Ensure required processName column is present
+    if 'processName' not in df.columns:
+        raise KeyError("DataFrame must contain a 'processName' column.")
+
+    # Filter rows that match the given processName
+    matching = df.loc[df['processName'] == processName]
+
+    params: List[Any] = [] # 'parameters' list to return
+
+    # Iterate through matching rows, convert to dict, normalize NaN -> None, and call from_dict
+    for _, row in matching.iterrows():
+        row_dict = row.to_dict()
+        obj = olca.Parameter.from_dict(row_dict)
+        params.append(obj)
+
+    return params
 
 def get_process_metadata(p: olca.Process,
                          metadata: dict,
                          **kwargs
                          ) -> olca.Process:
-    """Generates and attaches process metadata to olca.Process p.
+    """
+    Generates and attaches process metadata to olca.Process p.
     kwargs may contain "source_objs", "actor_objs" which are dictionaries
     of olca objects with names as keys
     """
@@ -180,6 +220,7 @@ def make_exchanges(
     exch_lst = []
     for index, row in df.query('ProcessName==@p.name').iterrows():
         e = olca.Exchange()
+        e.amount_formula = row['amountFormula']
         e.flow = flows[row['FlowUUID']].to_ref()
         e.is_quantitative_reference = bool(row['reference'])
         e.is_input = bool(row['IsInput'])
@@ -371,7 +412,11 @@ def build_process_dict(df: pd.DataFrame,
             p0.dq_system = dq.to_ref() if dq else None
             dq = kwargs['dq_objs'].get('Flow')
             p0.exchange_dq_system = dq.to_ref() if dq else None
-
+            
+        if kwargs.get('df_params'):
+            df_params = kwargs['df_params']
+            p0.parameters = make_param_list(df_params, name) if df_params else None
+            
         # print('Creating Metadata for Process', p)
         p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)
         print('Creating Exchanges for Process', name)

@@ -113,6 +113,8 @@ def get_process_metadata(p: olca.Process,
     """
     pdoc = olca.ProcessDocumentation()
     for k, v in metadata.items():
+        if isinstance(v, str):
+            v = v.rstrip() # remove trailing line breaks
         if k in dir(p):
             # some metadata items attach directly to the process
             setattr(p, k, v)

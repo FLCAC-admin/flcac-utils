@@ -44,7 +44,6 @@ in a list named 'parameters' within each process dictionary.
 '''
 param_schema ={
     'processName': {'dtype': 'str', 'required': True},
-    'independent': {'dtype': 'bool', 'required': True}, # independent = T / dependent = F
     'formula': {'dtype': 'str', 'required': False}, # Required if dependent
     'isInputParameter': {'dtype': 'bool', 'required': True}, # True if used in inputs; False if used in outputs
     'name': {'dtype': 'str', 'required': True}, # (string) unique identifier; reference to connect to exchange
@@ -123,22 +122,31 @@ def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
     dictionary. Convert dictionary into an olca parameter object. Append 
     parameter object to a list and return list.
     
-    The list of parameter objects is apped to an olca process object.
+    The list of parameter objects is added to an olca process object.
     """
-    # Ensure required processName column is present
     if 'processName' not in df.columns:
         raise KeyError("DataFrame must contain a 'processName' column.")
 
-    # Filter rows that match the given processName
     matching = df.loc[df['processName'] == processName]
 
-    params: List[Any] = [] # 'parameters' list to return
+    params: List[Any] = []
 
-    # Iterate through matching rows, convert to dict, normalize NaN -> None, and call from_dict
     for _, row in matching.iterrows():
+        # Convert row to dict
         row_dict = row.to_dict()
+        # Handle null formula / value keys based on value of isInputParameter
+        if row_dict.get('isInputParameter', ''):
+            row_dict.pop('formula', None)
+        else:
+            row_dict.pop('value', None)
+        # Assign dict values
+        #row_dict['@id'] = make_uuid([row['processName'], row['name']])
+        row_dict['@type'] = 'Parameter'
+        row_dict['parameterScope'] = 'PROCESS_SCOPE'
+        # Build olca Prameter object
         obj = olca.Parameter.from_dict(row_dict)
         params.append(obj)
+
 
     return params
 
@@ -413,9 +421,9 @@ def build_process_dict(df: pd.DataFrame,
             dq = kwargs['dq_objs'].get('Flow')
             p0.exchange_dq_system = dq.to_ref() if dq else None
             
-        if kwargs.get('df_params'):
+        if 'df_params' in kwargs:
             df_params = kwargs['df_params']
-            p0.parameters = make_param_list(df_params, name) if df_params else None
+            p0.parameters = make_param_list(df_params, name)
             
         # print('Creating Metadata for Process', p)
         p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)

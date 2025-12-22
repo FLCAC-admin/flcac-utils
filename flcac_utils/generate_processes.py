@@ -124,8 +124,9 @@ def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
     
     The list of parameter objects is added to an olca process object.
     """
+    
     if 'processName' not in df.columns:
-        raise KeyError("DataFrame must contain a 'processName' column.")
+        raise KeyError("Parameter DataFrame must contain a 'processName' column.")
 
     matching = df.loc[df['processName'] == processName]
 
@@ -135,19 +136,18 @@ def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
         # Convert row to dict
         row_dict = row.to_dict()
         # Handle null formula / value keys based on value of isInputParameter
-        if row_dict.get('isInputParameter', ''):
+        is_input = str(row_dict.get('isInputParameter', '')).strip().lower() == 'true'
+        if is_input:
             row_dict.pop('formula', None)
         else:
             row_dict.pop('value', None)
         # Assign dict values
-        #row_dict['@id'] = make_uuid([row['processName'], row['name']])
+        row_dict['@id'] = make_uuid([row['processName'], row['name']])
         row_dict['@type'] = 'Parameter'
         row_dict['parameterScope'] = 'PROCESS_SCOPE'
         # Build olca Prameter object
         obj = olca.Parameter.from_dict(row_dict)
         params.append(obj)
-
-
     return params
 
 def get_process_metadata(p: olca.Process,
@@ -227,8 +227,21 @@ def make_exchanges(
         process_db = pd.DataFrame()
     exch_lst = []
     for index, row in df.query('ProcessName==@p.name').iterrows():
+        # Check if row is associated with reference flow 
+        ref_val = row.get('reference', None)
+        is_reference = (
+            (ref_val is True) or
+            (isinstance(ref_val, str) and ref_val.strip().lower() == 'true')
+        )
+        
+        # If reference is true and amountFormula is NaN then remove amountFormula
+        if is_reference and (pd.isna(row.get('amountFormula', None)) or row.get('amountFormula', None) == 'nan'):
+            row = row.drop(labels=['amountFormula'], errors='ignore')
+            
         e = olca.Exchange()
-        e.amount_formula = row['amountFormula']
+        # Only add 'amountFormula' if present
+        if 'amountFormula' in row:
+            e.amount_formula = row['amountFormula']
         e.flow = flows[row['FlowUUID']].to_ref()
         e.is_quantitative_reference = bool(row['reference'])
         e.is_input = bool(row['IsInput'])
@@ -295,7 +308,7 @@ def build_flow_dict(df: pd.DataFrame,
 
     new_flows_to_write = []
     for index, row in df.drop_duplicates('FlowUUID').iterrows():
-    
+
         # If flow UUID is neither in FEDEFL or database of technospheric flows
         # then it needs to be created based on user supplied data
         if (fl is not None and (row['FlowUUID'] not in fl['Flow UUID'].values) and

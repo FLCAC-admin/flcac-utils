@@ -6,7 +6,7 @@ import olca_schema as olca
 import olca_schema.zipio as zipio #for writing to json
 import olca_schema.units as units
 from datetime import datetime, time
-from typing import List, Any
+from typing import List
 import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
@@ -116,23 +116,22 @@ def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     violations_mask = ref_true & dp_filled
     return df.loc[violations_mask, 'ProcessName'].astype(str).tolist()
 
-def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
+
+def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
     """
-    Get all entries for a single process from df_params. Convert rows into a
+    Get all parameter entries from a parameters dataframem, df_params. Convert rows into a
     dictionary. Convert dictionary into an olca parameter object. Append 
     parameter object to a list and return list.
     
     The list of parameter objects is added to an olca process object.
     """
     
-    if 'processName' not in df.columns:
+    if 'processName' not in df_params.columns:
         raise KeyError("Parameter DataFrame must contain a 'processName' column.")
 
-    matching = df.loc[df['processName'] == processName]
+    params: List[olca.Parameter] = []
 
-    params: List[Any] = []
-
-    for _, row in matching.iterrows():
+    for _, row in df_params.iterrows():
         # Convert row to dict
         row_dict = row.to_dict()
         # Handle null formula / value keys based on value of isInputParameter
@@ -143,12 +142,12 @@ def make_param_list(df: pd.DataFrame, processName: str) -> List[Any]:
             row_dict.pop('value', None)
         # Assign dict values
         row_dict['@id'] = make_uuid([row['processName'], row['name']])
-        row_dict['@type'] = 'Parameter'
         row_dict['parameterScope'] = 'PROCESS_SCOPE'
         # Build olca Prameter object
         obj = olca.Parameter.from_dict(row_dict)
         params.append(obj)
     return params
+
 
 def get_process_metadata(p: olca.Process,
                          metadata: dict,
@@ -436,7 +435,7 @@ def build_process_dict(df: pd.DataFrame,
             
         if 'df_params' in kwargs:
             df_params = kwargs['df_params']
-            p0.parameters = make_param_list(df_params, name)
+            p0.parameters = make_param_list(df_params.query('processName == @name'))
             
         # print('Creating Metadata for Process', p)
         p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)

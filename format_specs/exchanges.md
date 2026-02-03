@@ -7,6 +7,7 @@
 | ProcessName     | str   | Y        | Name of the process |
 | FlowUUID        | str   | Y        | Unique hash for the flow in the exchange, can match the FEDEFL, an existing technosphere flow, or blank for a new flow |
 | FlowName        | str   | Y        | Name of the flow |
+| amountFormula   | str   | N        | Name of the parameter providing the exchange value |
 | Context         | str   | N        | Required for` ELEMENTARY_FLOW`: FEDEFL context, e.g. `emission/air`; Required for NEW `PRODUCT_FLOW` or `WASTE_FLOW`: the category name; Not required for existing `PRODUCT_FLOW` or `WASTE_FLOW` |
 | IsInput         | bool  | Y        | Inputs = `True`, Outputs = `False` |
 | FlowType        | str   | Y        | `ELEMENTARY_FLOW`, `PRODUCT_FLOW`, or `WASTE_FLOW` |

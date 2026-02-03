@@ -11,7 +11,7 @@ import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
 from pathlib import Path
-from flcac_utils.util import zero_pad_version
+from flcac_utils.util import zero_pad_version, _set_base_attributes
 
 
 outPath = Path(__file__).parents[1] / 'output'
@@ -56,22 +56,6 @@ param_schema ={
 unit_dict = {
     "metric ton": "ton"
 }
-
-
-def _set_base_attributes(
-        entity,
-        name: str
-        ):
-    """Sets base attributes for new flows."""
-    if (entity.id is None) or (entity.id == ''):
-        entity.id = make_uuid(name)
-    if entity.name is None:
-        entity.name = name
-    #entity.version = '00.00.001'
-    # set to noon local time
-    entity.last_change = (datetime.combine(
-        datetime.utcnow().date(), time(12)).isoformat() + 'Z')
-    return entity
 
 
 def validate_exchange_data(df):

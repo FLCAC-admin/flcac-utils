@@ -9,8 +9,8 @@ from pathlib import Path
 import olca_schema as o
 import esupy.bibtex
 from esupy.location import extract_coordinates
+from esupy.util import make_uuid
 from flcac_utils.commons_api import read_commons_data, get_single_object
-from flcac_utils.generate_processes import _set_base_attributes
 import zipfile
 
 
@@ -18,6 +18,22 @@ def assign_year_to_meta(meta, year1, year2=None):
     meta['valid_from'] = datetime.datetime(int(year1), 1, 1).isoformat(timespec='seconds')
     meta['valid_until'] = datetime.datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
     return meta
+
+
+def _set_base_attributes(
+        entity,
+        name: str
+        ):
+    """Sets base attributes for new flows."""
+    if (entity.id is None) or (entity.id == ''):
+        entity.id = make_uuid(name)
+    if entity.name is None:
+        entity.name = name
+    #entity.version = '00.00.001'
+    # set to noon local time
+    entity.last_change = (datetime.combine(
+        datetime.utcnow().date(), datetime.time(12)).isoformat() + 'Z')
+    return entity
 
 def format_dqi_score(dqi_dict):
     """generates a string in the form of "(1;2;3;2;2)"

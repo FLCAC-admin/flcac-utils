@@ -2,7 +2,7 @@
 Supporting functions
 """
 
-import datetime
+from datetime import datetime, time
 import math
 import pandas as pd
 from pathlib import Path
@@ -15,8 +15,8 @@ import zipfile
 
 
 def assign_year_to_meta(meta, year1, year2=None):
-    meta['valid_from'] = datetime.datetime(int(year1), 1, 1).isoformat(timespec='seconds')
-    meta['valid_until'] = datetime.datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
+    meta['valid_from'] = datetime(int(year1), 1, 1).isoformat(timespec='seconds')
+    meta['valid_until'] = datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
     return meta
 
 
@@ -32,7 +32,7 @@ def _set_base_attributes(
     #entity.version = '00.00.001'
     # set to noon local time
     entity.last_change = (datetime.combine(
-        datetime.utcnow().date(), datetime.time(12)).isoformat() + 'Z')
+        datetime.utcnow().date(), time(12)).isoformat() + 'Z')
     return entity
 
 def format_dqi_score(dqi_dict):

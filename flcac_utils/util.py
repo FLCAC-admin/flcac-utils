@@ -251,6 +251,74 @@ def extract_bridge_process(tgt_name, repo):
     return (b,f)
 
 
+def zero_pad_version(s: str, widths: tuple[int, ...] = (2, 2, 3), sep: str = ".") -> str:
+    """
+    Convert a dotted numeric string like "1.0", "1.1", or "1.2.1" into a fixed-width
+    dotted format with leading zeros (default "XX.XX.XXX" -> widths (2,2,3)).
+
+    Rules:
+      - Split on `sep`.
+      - Missing segments are treated as 0.
+      - Extra segments beyond `widths` raise ValueError.
+      - Each segment must be an integer-like token (e.g., "01", "2"); empty tokens invalid.
+
+    Parameters
+    ----------
+    s:
+        Input dotted string.
+    widths:
+        Target width for each segment (default (2, 2, 3)).
+    sep:
+        Segment separator (default ".").
+
+    Returns
+    -------
+    str
+        Zero-padded version string with exactly len(widths) segments.
+
+    Examples
+    --------
+    >>> zero_pad_version("1.0")
+    '01.00.000'
+    >>> zero_pad_version("1.1")
+    '01.01.000'
+    >>> zero_pad_version("1.2.1")
+    '01.02.001'
+    """
+    if s is None:
+        raise ValueError("Input cannot be None")
+
+    parts = s.strip().split(sep) if s.strip() != "" else []
+    if any(p == "" for p in parts):
+        raise ValueError(f"Invalid version string (empty segment): {s!r}")
+
+    if len(parts) > len(widths):
+        raise ValueError(f"Too many segments in {s!r}; expected at most {len(widths)}")
+
+    # Parse existing parts as integers
+    nums: list[int] = []
+    for p in parts:
+        try:
+            n = int(p)
+        except ValueError as e:
+            raise ValueError(f"Non-integer segment {p!r} in {s!r}") from e
+        if n < 0:
+            raise ValueError(f"Negative segment {p!r} in {s!r}")
+        nums.append(n)
+
+    # Fill missing segments with zeros
+    nums.extend([0] * (len(widths) - len(nums)))
+
+    # Format with zero padding; enforce that segment fits in width
+    out = []
+    for n, w in zip(nums, widths):
+        if n >= 10**w:
+            raise ValueError(f"Segment {n} does not fit in width {w} for {s!r}")
+        out.append(f"{n:0{w}d}")
+
+    return sep.join(out)
+
+
 def round_to_sig_figs(number, sig_figs):
     """
     Rounds a number to a specified number of significant figures.

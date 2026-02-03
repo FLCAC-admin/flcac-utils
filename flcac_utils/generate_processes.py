@@ -11,6 +11,7 @@ import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
 from pathlib import Path
+from flcac_utils.util import zero_pad_version
 
 
 outPath = Path(__file__).parents[1] / 'output'
@@ -419,6 +420,8 @@ def build_process_dict(df: pd.DataFrame,
         print(name)
         p0 = olca.Process()
         p0 = _set_base_attributes(p0, name)
+        if 'version' in kwargs:
+            p0.version = zero_pad_version(kwargs['version'])
         # Make sure UUID is always set based on process name so it never changes
         p0.id = make_uuid(name) if 'ProcessID' not in cols else row['ProcessID']
         p0.process_type = olca.ProcessType.UNIT_PROCESS

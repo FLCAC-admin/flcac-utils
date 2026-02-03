@@ -11,6 +11,7 @@ import pandas as pd
 from esupy.util import make_uuid
 from esupy.location import olca_location_meta
 from pathlib import Path
+from flcac_utils.util import zero_pad_version, _set_base_attributes
 
 
 outPath = Path(__file__).parents[1] / 'output'
@@ -24,6 +25,7 @@ exchange_schema = {
     "ProcessName": {'dtype': 'str', 'required': True},
     "FlowUUID": {'dtype': 'str', 'required': True},
     "FlowName": {'dtype': 'str', 'required': True},
+    "amountFormula": {'dtype': 'str', 'required': False},
     "Context":  {'dtype': 'str', 'required': True},
     "IsInput": {'dtype': 'bool', 'required': True},
     "FlowType": {'dtype': 'str', 'required': True},
@@ -37,26 +39,23 @@ exchange_schema = {
     # "tag": {'dtype': 'str', 'required': False}
 }
 
+'''
+Parameter dictionary schema fields. Parameter dictionaries are stored in 
+in a list named 'parameters' within each process dictionary. 
+'''
+param_schema ={
+    'processName': {'dtype': 'str', 'required': True},
+    'formula': {'dtype': 'str', 'required': False}, # Required if dependent
+    'isInputParameter': {'dtype': 'bool', 'required': True}, # True if used in inputs; False if used in outputs
+    'name': {'dtype': 'str', 'required': True}, # (string) unique identifier; reference to connect to exchange
+    'value': {'dtype': 'float', 'required': False}, 
+    'description': {'dtype': 'str', 'required': False},
+}
+
 # convert units to units in olca_schema.units
 unit_dict = {
     "metric ton": "ton"
 }
-
-
-def _set_base_attributes(
-        entity,
-        name: str
-        ):
-    """Sets base attributes for new flows."""
-    if (entity.id is None) or (entity.id == ''):
-        entity.id = make_uuid(name)
-    if entity.name is None:
-        entity.name = name
-    #entity.version = '00.00.001'
-    # set to noon local time
-    entity.last_change = (datetime.combine(
-        datetime.utcnow().date(), time(12)).isoformat() + 'Z')
-    return entity
 
 
 def validate_exchange_data(df):
@@ -103,16 +102,52 @@ def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     return df.loc[violations_mask, 'ProcessName'].astype(str).tolist()
 
 
+def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
+    """
+    Get all parameter entries from a parameters dataframem, df_params. Convert rows into a
+    dictionary. Convert dictionary into an olca parameter object. Append 
+    parameter object to a list and return list.
+    
+    The list of parameter objects is added to an olca process object.
+    """
+    
+    if 'processName' not in df_params.columns:
+        raise KeyError("Parameter DataFrame must contain a 'processName' column.")
+
+    params: List[olca.Parameter] = []
+
+    for _, row in df_params.iterrows():
+        # Convert row to dict
+        row_dict = row.to_dict()
+        # Handle null formula / value keys based on value of isInputParameter
+        is_input = str(row_dict.get('isInputParameter', '')).strip().lower() == 'true'
+        if is_input:
+            row_dict.pop('formula', None)
+        else:
+            row_dict.pop('value', None)
+        # Assign dict values
+        row_dict['@id'] = make_uuid([row['processName'], row['name']])
+        row_dict['parameterScope'] = 'PROCESS_SCOPE'
+        # Build olca Prameter object
+        obj = olca.Parameter.from_dict(row_dict)
+        params.append(obj)
+    return params
+
+
 def get_process_metadata(p: olca.Process,
                          metadata: dict,
                          **kwargs
                          ) -> olca.Process:
-    """Generates and attaches process metadata to olca.Process p.
+    """
+    Generates and attaches process metadata to olca.Process p.
     kwargs may contain "source_objs", "actor_objs" which are dictionaries
     of olca objects with names as keys
     """
     pdoc = olca.ProcessDocumentation()
     for k, v in metadata.items():
+        if isinstance(v, str):
+            if k not in ('data_set_owner', 'data_generator', 'data_documentor'):
+                v = v.rstrip() # remove trailing line breaks
         if k in dir(p):
             # some metadata items attach directly to the process
             setattr(p, k, v)
@@ -179,7 +214,21 @@ def make_exchanges(
         process_db = pd.DataFrame()
     exch_lst = []
     for index, row in df.query('ProcessName==@p.name').iterrows():
+        # Check if row is associated with reference flow 
+        ref_val = row.get('reference', None)
+        is_reference = (
+            (ref_val is True) or
+            (isinstance(ref_val, str) and ref_val.strip().lower() == 'true')
+        )
+        
+        # If reference is true and amountFormula is NaN then remove amountFormula
+        if is_reference and (pd.isna(row.get('amountFormula', None)) or row.get('amountFormula', None) == 'nan'):
+            row = row.drop(labels=['amountFormula'], errors='ignore')
+            
         e = olca.Exchange()
+        # Only add 'amountFormula' if present
+        if 'amountFormula' in row:
+            e.amount_formula = row['amountFormula']
         e.flow = flows[row['FlowUUID']].to_ref()
         e.is_quantitative_reference = bool(row['reference'])
         e.is_input = bool(row['IsInput'])
@@ -246,7 +295,7 @@ def build_flow_dict(df: pd.DataFrame,
 
     new_flows_to_write = []
     for index, row in df.drop_duplicates('FlowUUID').iterrows():
-    
+
         # If flow UUID is neither in FEDEFL or database of technospheric flows
         # then it needs to be created based on user supplied data
         if (fl is not None and (row['FlowUUID'] not in fl['Flow UUID'].values) and
@@ -355,6 +404,8 @@ def build_process_dict(df: pd.DataFrame,
         print(name)
         p0 = olca.Process()
         p0 = _set_base_attributes(p0, name)
+        if 'version' in kwargs:
+            p0.version = zero_pad_version(kwargs['version'])
         # Make sure UUID is always set based on process name so it never changes
         p0.id = make_uuid(name) if 'ProcessID' not in cols else row['ProcessID']
         p0.process_type = olca.ProcessType.UNIT_PROCESS
@@ -371,7 +422,11 @@ def build_process_dict(df: pd.DataFrame,
             p0.dq_system = dq.to_ref() if dq else None
             dq = kwargs['dq_objs'].get('Flow')
             p0.exchange_dq_system = dq.to_ref() if dq else None
-
+            
+        if 'df_params' in kwargs:
+            df_params = kwargs['df_params']
+            p0.parameters = make_param_list(df_params.query('processName == @name'))
+            
         # print('Creating Metadata for Process', p)
         p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)
         print('Creating Exchanges for Process', name)

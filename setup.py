@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="flcac_utils",
-    version="0.2.2",
+    version="0.3.0",
     packages=["flcac_utils"],
     include_package_data=True,
     python_requires=">=3.9",

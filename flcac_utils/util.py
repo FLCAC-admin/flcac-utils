@@ -2,22 +2,38 @@
 Supporting functions
 """
 
-import datetime
+from datetime import datetime, time
 import math
 import pandas as pd
 from pathlib import Path
 import olca_schema as o
 import esupy.bibtex
 from esupy.location import extract_coordinates
+from esupy.util import make_uuid
 from flcac_utils.commons_api import read_commons_data, get_single_object
-from flcac_utils.generate_processes import _set_base_attributes
 import zipfile
 
 
 def assign_year_to_meta(meta, year1, year2=None):
-    meta['valid_from'] = datetime.datetime(int(year1), 1, 1).isoformat(timespec='seconds')
-    meta['valid_until'] = datetime.datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
+    meta['valid_from'] = datetime(int(year1), 1, 1).isoformat(timespec='seconds')
+    meta['valid_until'] = datetime(int(year2 if year2 else year1), 12, 31).isoformat(timespec='seconds')
     return meta
+
+
+def _set_base_attributes(
+        entity,
+        name: str
+        ):
+    """Sets base attributes for new flows."""
+    if (entity.id is None) or (entity.id == ''):
+        entity.id = make_uuid(name)
+    if entity.name is None:
+        entity.name = name
+    #entity.version = '00.00.001'
+    # set to noon local time
+    entity.last_change = (datetime.combine(
+        datetime.utcnow().date(), time(12)).isoformat() + 'Z')
+    return entity
 
 def format_dqi_score(dqi_dict):
     """generates a string in the form of "(1;2;3;2;2)"
@@ -249,6 +265,74 @@ def extract_bridge_process(tgt_name, repo):
             break
     f = get_single_object(repo, 'FLOW', input_flow)
     return (b,f)
+
+
+def zero_pad_version(s: str, widths: tuple[int, ...] = (2, 2, 3), sep: str = ".") -> str:
+    """
+    Convert a dotted numeric string like "1.0", "1.1", or "1.2.1" into a fixed-width
+    dotted format with leading zeros (default "XX.XX.XXX" -> widths (2,2,3)).
+
+    Rules:
+      - Split on `sep`.
+      - Missing segments are treated as 0.
+      - Extra segments beyond `widths` raise ValueError.
+      - Each segment must be an integer-like token (e.g., "01", "2"); empty tokens invalid.
+
+    Parameters
+    ----------
+    s:
+        Input dotted string.
+    widths:
+        Target width for each segment (default (2, 2, 3)).
+    sep:
+        Segment separator (default ".").
+
+    Returns
+    -------
+    str
+        Zero-padded version string with exactly len(widths) segments.
+
+    Examples
+    --------
+    >>> zero_pad_version("1.0")
+    '01.00.000'
+    >>> zero_pad_version("1.1")
+    '01.01.000'
+    >>> zero_pad_version("1.2.1")
+    '01.02.001'
+    """
+    if s is None:
+        raise ValueError("Input cannot be None")
+
+    parts = s.strip().split(sep) if s.strip() != "" else []
+    if any(p == "" for p in parts):
+        raise ValueError(f"Invalid version string (empty segment): {s!r}")
+
+    if len(parts) > len(widths):
+        raise ValueError(f"Too many segments in {s!r}; expected at most {len(widths)}")
+
+    # Parse existing parts as integers
+    nums: list[int] = []
+    for p in parts:
+        try:
+            n = int(p)
+        except ValueError as e:
+            raise ValueError(f"Non-integer segment {p!r} in {s!r}") from e
+        if n < 0:
+            raise ValueError(f"Negative segment {p!r} in {s!r}")
+        nums.append(n)
+
+    # Fill missing segments with zeros
+    nums.extend([0] * (len(widths) - len(nums)))
+
+    # Format with zero padding; enforce that segment fits in width
+    out = []
+    for n, w in zip(nums, widths):
+        if n >= 10**w:
+            raise ValueError(f"Segment {n} does not fit in width {w} for {s!r}")
+        out.append(f"{n:0{w}d}")
+
+    return sep.join(out)
 
 
 def round_to_sig_figs(number, sig_figs):

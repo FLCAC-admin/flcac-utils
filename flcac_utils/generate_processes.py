@@ -239,7 +239,8 @@ def make_exchanges(
         e.is_quantitative_reference = bool(row["reference"])
         e.is_input = bool(row["IsInput"])
         e.amount = row["amount"]
-        e.description = row.get("description")
+        _desc = row.get("description")
+        e.description = "" if _desc is None or pd.isna(_desc) else _desc
         e.is_avoided_product = bool(row.get("avoided_product", False))
         e.unit = units.unit_ref(row["unit"])
         # ^^ needs to be a Ref not a str

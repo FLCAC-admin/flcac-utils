@@ -29,10 +29,12 @@ def test_flow_extract_write_zip(df_olca, tmp_path):
     from flcac_utils.util import extract_flows
 
     flow_dict = extract_flows(
-        {"USLCI": ["Diesel, dispensed at pump"]},
+        {"USLCI": ["Diesel; dispensed at pump",
+                   "Not a flow"]},
         add_tags=False,
         auth=False,
     )
+    assert len(flow_dict) == 1
 
     validate_exchange_data(df_olca)
     flows, new_flows = build_flow_dict(df_olca)

@@ -14,5 +14,11 @@ setup(
                       "numpy>=2.1",
                       "pyyaml>=5.3"
                       ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "ruff>=0.4",
+        ],
+    },
     # description=''
 )

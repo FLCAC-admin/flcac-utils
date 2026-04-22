@@ -2,3 +2,4 @@ SourceRepoName,SourceFlowName,SourceFlowUUID,SourceFlowContext,SourceUnit,MatchC
 test,Gasoline,,,btu,=,1,USLCI,Gasoline; dispensed at pump,btu,"Dispensing of gasoline, at pump",FALSE,,,,,
 test,Diesel,,,btu,=,1,USLCI,Diesel; dispensed at pump,btu,"Dispensing of diesel, at pump",FALSE,,,,,
 test,Electricity from national grid,,,MWh,=,1000,US Electricity Baseline,"Electricity, AC, 120 V",kWh,Electricity; at user; consumption mix - US - US,FALSE,,,,,
+test,E85,,,btu,=,0.00003908,USLCI,"Ethanol, 85%, blended, at service station",kg,,TRUE,"Ethanol, 85%, disepensed, at pump",,,,25590 btu/kg

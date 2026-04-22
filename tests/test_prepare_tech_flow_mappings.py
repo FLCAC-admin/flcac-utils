@@ -16,7 +16,7 @@ _FIXTURE_DIR = Path(__file__).resolve().parent / "data"
 
 @pytest.mark.network
 def test_prepare_tech_flow_mappings_valid_provider_csv():
-    """USLCI fuel rows plus US EB 120 V row with at-user mix."""
+    """USLCI fuels, US EB 120 V (at-user mix), and E85 bridge row."""
     df = pd.read_csv(_FIXTURE_DIR / "tech_mapping_providers_valid.csv")
     prepare_tech_flow_mappings(df, auth=False)
 

@@ -2,6 +2,8 @@
 Mapping functions
 """
 
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 from esupy.util import make_uuid
@@ -9,9 +11,54 @@ from esupy.util import make_uuid
 from flcac_utils.util import extract_flows, extract_processes
 
 
+def _norm_uuid(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def assert_provider_supplies_target_flow(
+    process,
+    target_flow_id: str,
+    *,
+    provider_name: str,
+    target_flow_name: str,
+    source_flow_name: Optional[str] = None,
+) -> None:
+    """
+    Raise ValueError if ``process`` has no technosphere product output whose
+    flow id matches ``target_flow_id`` (case-insensitive string compare).
+    """
+    want = _norm_uuid(target_flow_id)
+    if not want:
+        raise ValueError("target_flow_id is empty; cannot validate provider output")
+
+    exchanges = getattr(process, "exchanges", None) or []
+    for ex in exchanges:
+        if getattr(ex, "is_input", False):
+            continue
+        flo = getattr(ex, "flow", None)
+        if flo is None:
+            continue
+        if _norm_uuid(getattr(flo, "id", None)) == want:
+            return
+
+    ctx = (
+        f" (source flow {source_flow_name!r})" if source_flow_name is not None else ""
+    )
+    raise ValueError(
+        f"Default provider {provider_name!r} does not supply target flow "
+        f"{target_flow_name!r} (uuid={target_flow_id}){ctx}. "
+        "Choose a provider process that lists this flow as a product output."
+    )
+
+
 def prepare_tech_flow_mappings(df, auth=False):
     """
     Prepares data objects from a technosphere flow mapping file
+
+    Each default provider process must list the mapped target flow as a product
+    output (non-input exchange); otherwise ValueError is raised.
 
     :param df: technosphere flow mapping file see format_specs/tech_mapping.md
     :param auth: bool, if authorized access to FLCAC is required set to True
@@ -71,7 +118,7 @@ def prepare_tech_flow_mappings(df, auth=False):
     flow_objs = extract_flows(
         f_dict, add_tags=False, auth=auth
     )  # don't add tags, all flows are internal
-    provider_dict = extract_processes(p_dict, to_ref=True, auth=auth)
+    provider_dict = extract_processes(p_dict, to_ref=False, auth=auth)
 
     for k, v in flow_dict.items():
         if not flow_dict[k].get("BRIDGE"):
@@ -82,6 +129,26 @@ def prepare_tech_flow_mappings(df, auth=False):
                     print(f"New flow needed: {v['name']}.")
                 else:
                     print(f"Flow: {v['name']} not found.")
+
+    for src_name, v in flow_dict.items():
+        if v.get("BRIDGE"):
+            continue
+        if pd.isna(v.get("provider")) or not v.get("provider"):
+            continue
+        tid = v.get("id")
+        if not tid:
+            continue
+        pname = v["provider"]
+        proc = provider_dict.get(pname)
+        if proc is None:
+            continue
+        assert_provider_supplies_target_flow(
+            proc,
+            str(tid),
+            provider_name=pname,
+            target_flow_name=v["name"],
+            source_flow_name=src_name,
+        )
 
     return (flow_dict, flow_objs, provider_dict)
 

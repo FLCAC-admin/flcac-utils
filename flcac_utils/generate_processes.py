@@ -177,7 +177,28 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
     Generates and attaches process metadata to olca.Process p.
     kwargs may contain "source_objs", "actor_objs" which are dictionaries
     of olca objects with names as keys
+
+    When ``strict`` is True (default; set via ``build_process_dict(...,
+    strict_metadata=...)``),
+    missing lookups raise ``ValueError`` only if the corresponding object map was
+    passed (e.g. ``source_objs`` / ``actor_objs``). Omitted maps skip resolution
+    without error.
     """
+    strict = kwargs.get("strict", True)
+
+    def _resolve_ref(obj_dict, lookup, field_name):
+        obj = obj_dict.get(lookup) if obj_dict is not None else None
+        if obj is None:
+            msg = (
+                f"Missing {field_name} reference '{lookup}' "
+                f"for process '{p.name}'."
+            )
+            if strict:
+                raise ValueError(msg)
+            print(f"WARNING: {msg}")
+            return None
+        return obj.to_ref()
+
     pdoc = olca.ProcessDocumentation()
     for k, v in metadata.items():
         if isinstance(v, str):
@@ -188,36 +209,42 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
             if k == "version" and isinstance(v, (int, float)):
                 v = str(v)
             setattr(p, k, v)
+            continue
         elif k not in dir(pdoc):
             print(f"WARNING: {k} not a process doc key")
             continue
         elif metadata_value_is_empty(v):
             continue  # no metadata to add, skip
         elif k in ("sources", "publication"):
-            if "source_objs" not in kwargs:
-                print("No Sources passed!!")
+            if "source_objs" not in kwargs or kwargs.get("source_objs") is None:
                 continue
-            else:
-                if k == "sources":
-                    # list of source objects
-                    v = [
-                        kwargs.get("source_objs").get(as_lookup_str(s)).to_ref()
-                        for s in v
-                    ]
-                elif k == "publication":
-                    # single source object
-                    v = kwargs.get("source_objs").get(as_lookup_str(v)).to_ref()
-        elif k in ("data_set_owner", "data_generator", "data_documentor"):
-            if "actor_objs" not in kwargs:
-                print("No Actors passed!!")
-                continue
-            else:
-                a = kwargs.get("actor_objs").get(as_lookup_str(v))
-                if a:
-                    v = a.to_ref()
-                else:
-                    print(f"Actor: `{v}` not found!")
+            source_objs = kwargs["source_objs"]
+            if k == "sources":
+                # list of source objects
+                refs = []
+                for s in v:
+                    sref = _resolve_ref(
+                        source_objs,
+                        as_lookup_str(s),
+                        "source",
+                    )
+                    if sref is not None:
+                        refs.append(sref)
+                v = refs
+            elif k == "publication":
+                # single source object
+                sref = _resolve_ref(source_objs, as_lookup_str(v), "publication")
+                if sref is None:
                     continue
+                v = sref
+        elif k in ("data_set_owner", "data_generator", "data_documentor"):
+            if "actor_objs" not in kwargs or kwargs.get("actor_objs") is None:
+                continue
+            actor_objs = kwargs["actor_objs"]
+            aref = _resolve_ref(actor_objs, as_lookup_str(v), "actor")
+            if aref is None:
+                continue
+            v = aref
         elif k in ("reviews"):
             rev_list = []
             if not isinstance(v, dict):
@@ -232,9 +259,18 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
                 )
                 if "report" in r:
                     report = list(r["report"].values())[0]
-                    s = kwargs.get("source_objs")
-                    s = s.get(as_lookup_str(report)).to_ref() if s else None
-                    rev.report = s
+                    if (
+                        "source_objs" not in kwargs
+                        or kwargs.get("source_objs") is None
+                    ):
+                        rev.report = None
+                    else:
+                        rref = _resolve_ref(
+                            kwargs["source_objs"],
+                            as_lookup_str(report),
+                            "review report source",
+                        )
+                        rev.report = rref
                 rev_list.append(rev)
             v = rev_list
         setattr(pdoc, k, v)
@@ -413,7 +449,11 @@ def build_flow_dict(
 
 
 def build_process_dict(
-    df: pd.DataFrame, flows: dict[str, olca.Flow], meta: dict[str, str], **kwargs
+    df: pd.DataFrame,
+    flows: dict[str, olca.Flow],
+    meta: dict[str, str],
+    strict_metadata: bool = True,
+    **kwargs,
 ) -> dict:
     """
     Creates a dictionary of olca.Process objects with UUID as dictionary key.
@@ -426,6 +466,10 @@ def build_process_dict(
         source_objs: dict[str, olca.Source]
         actor_objs: dict[str, olca.Actor]
         dq_objs: dict[str, olca.DQSystem]
+    :param strict_metadata: default True. If True, a missing name in
+        ``source_objs`` / ``actor_objs`` (when that map is passed) raises
+        ``ValueError``. Omitted ``source_objs`` / ``actor_objs`` skips resolution
+        without error.
     :return: dict of olca.Process objects with UUID as dictionary key
     """
     ## This code block is useful when considering allocation (see AISI work)
@@ -483,7 +527,9 @@ def build_process_dict(
             p0.parameters = make_param_list(df_params.query("processName == @name"))
 
         # print('Creating Metadata for Process', p)
-        p0 = get_process_metadata(p=p0, metadata=meta, **kwargs)
+        p0 = get_process_metadata(
+            p=p0, metadata=meta, strict=strict_metadata, **kwargs
+        )
         print("Creating Exchanges for Process", name)
         p0 = make_exchanges(
             p=p0,

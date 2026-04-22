@@ -55,6 +55,7 @@ def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
         df_olca,
         flows,
         meta=process_meta,
+        strict_metadata=False,  # Commons actor lookup is incomplete in this fixture
         loc_objs=location_objs,
         source_objs=source_objs,
         actor_objs=actor_objs,

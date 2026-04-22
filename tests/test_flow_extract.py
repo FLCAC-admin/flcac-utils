@@ -10,16 +10,17 @@ import pandas as pd
 import pytest
 
 parent_path = Path(__file__).parent
+data_path = parent_path / "data"
 
 
 @pytest.fixture
 def df_olca() -> pd.DataFrame:
-    return pd.read_csv(parent_path / "flow_unit_test.csv")
+    return pd.read_csv(data_path / "flow_unit_test.csv")
 
 
 @pytest.mark.network
 def test_flow_extract_write_zip(df_olca, tmp_path):
-    """Build processes from flow_unit_test.csv and write zip under tmp_path."""
+    """Build processes from data/flow_unit_test.csv and write zip under tmp_path."""
     from flcac_utils.generate_processes import (
         build_flow_dict,
         build_process_dict,

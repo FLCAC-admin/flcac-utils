@@ -11,6 +11,7 @@ import pandas as pd
 import yaml
 
 parent_path = Path(__file__).parent
+data_path = parent_path / "data"
 
 
 def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
@@ -19,7 +20,7 @@ def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
 
     Returns (flows, processes, path_to_written_zip).
     """
-    df_olca = pd.read_csv(parent_path / "test_electricity.csv")
+    df_olca = pd.read_csv(data_path / "test_electricity.csv")
 
     from esupy.location import extract_coordinates
 
@@ -38,11 +39,11 @@ def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
         extract_sources_from_process_meta,
     )
 
-    with open(parent_path / "process_metadata.yaml") as f:
+    with open(data_path / "process_metadata.yaml") as f:
         process_meta = yaml.safe_load(f)
 
     process_meta, source_objs = extract_sources_from_process_meta(
-        process_meta, bib_path=parent_path / "test.bib"
+        process_meta, bib_path=data_path / "test.bib"
     )
     process_meta, actor_objs = extract_actors_from_process_meta(process_meta)
 

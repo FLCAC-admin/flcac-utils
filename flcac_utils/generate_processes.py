@@ -14,7 +14,7 @@ from esupy.location import olca_location_meta
 from esupy.util import make_uuid
 
 from flcac_utils.meta_coerce import as_lookup_str, metadata_value_is_empty
-from flcac_utils.util import _set_base_attributes, zero_pad_version
+from flcac_utils.util import _set_base_attributes, norm_uuid, zero_pad_version
 
 outPath = Path(__file__).parents[1] / "output"
 
@@ -85,6 +85,35 @@ def validate_exchange_data(df):
     if names:
         raise ValueError(
             "Default provider entered for reference flow in processes: ", names
+        )
+
+
+def assert_no_exchange_self_default_provider(process: olca.Process) -> None:
+    """
+    Raise ValueError if any exchange on ``process`` uses this process as its
+    ``default_provider`` (self-loop).
+    """
+    pid = norm_uuid(getattr(process, "id", None))
+    if not pid:
+        return
+    pname = getattr(process, "name", None) or "(unnamed process)"
+    for i, ex in enumerate(getattr(process, "exchanges", None) or []):
+        dp = getattr(ex, "default_provider", None)
+        if dp is None:
+            continue
+        dpid = norm_uuid(getattr(dp, "id", None))
+        if not dpid or dpid != pid:
+            continue
+        flo = getattr(ex, "flow", None)
+        flabel = (
+            getattr(flo, "name", None)
+            or getattr(flo, "id", None)
+            or f"exchange index {i}"
+        )
+        raise ValueError(
+            f"Process {pname!r} (uuid={process.id}) lists itself as the default "
+            f"provider on the exchange for flow {flabel!r}. "
+            "Remove or change default_provider for that exchange."
         )
 
 
@@ -463,6 +492,7 @@ def build_process_dict(
             # process_db = process_db)
             process_db=None,
         )
+        assert_no_exchange_self_default_provider(p0)
         print("\n")
         processes[p0.id] = p0
     return processes

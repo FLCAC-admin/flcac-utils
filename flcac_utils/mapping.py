@@ -8,13 +8,7 @@ import numpy as np
 import pandas as pd
 from esupy.util import make_uuid
 
-from flcac_utils.util import extract_flows, extract_processes
-
-
-def _norm_uuid(value: object) -> str:
-    if value is None:
-        return ""
-    return str(value).strip().lower()
+from flcac_utils.util import extract_flows, extract_processes, norm_uuid
 
 
 def assert_provider_supplies_target_flow(
@@ -29,7 +23,7 @@ def assert_provider_supplies_target_flow(
     Raise ValueError if ``process`` has no technosphere product output whose
     flow id matches ``target_flow_id`` (case-insensitive string compare).
     """
-    want = _norm_uuid(target_flow_id)
+    want = norm_uuid(target_flow_id)
     if not want:
         raise ValueError("target_flow_id is empty; cannot validate provider output")
 
@@ -40,7 +34,7 @@ def assert_provider_supplies_target_flow(
         flo = getattr(ex, "flow", None)
         if flo is None:
             continue
-        if _norm_uuid(getattr(flo, "id", None)) == want:
+        if norm_uuid(getattr(flo, "id", None)) == want:
             return
 
     ctx = (

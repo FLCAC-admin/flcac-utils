@@ -17,6 +17,13 @@ from flcac_utils.commons_api import get_single_object, read_commons_data
 from flcac_utils.meta_coerce import as_lookup_str, coerce_calendar_year
 
 
+def norm_uuid(value: object) -> str:
+    """Return a lowercase, stripped string id, or empty string if missing."""
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
 def assign_year_to_meta(meta, year1, year2=None):
     y1 = coerce_calendar_year(year1)
     y2 = coerce_calendar_year(year2 if year2 is not None else year1)

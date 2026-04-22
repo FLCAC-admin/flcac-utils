@@ -13,6 +13,7 @@ import pandas as pd
 from esupy.location import olca_location_meta
 from esupy.util import make_uuid
 
+from flcac_utils.meta_coerce import as_lookup_str, metadata_value_is_empty
 from flcac_utils.util import _set_base_attributes, zero_pad_version
 
 outPath = Path(__file__).parents[1] / "output"
@@ -155,11 +156,13 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
                 v = v.rstrip()  # remove trailing line breaks
         if k in dir(p):
             # some metadata items attach directly to the process
+            if k == "version" and isinstance(v, (int, float)):
+                v = str(v)
             setattr(p, k, v)
         elif k not in dir(pdoc):
             print(f"WARNING: {k} not a process doc key")
             continue
-        elif (v is None) or (len(v) == 0):
+        elif metadata_value_is_empty(v):
             continue  # no metadata to add, skip
         elif k in ("sources", "publication"):
             if "source_objs" not in kwargs:
@@ -168,16 +171,19 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
             else:
                 if k == "sources":
                     # list of source objects
-                    v = [kwargs.get("source_objs").get(s).to_ref() for s in v]
+                    v = [
+                        kwargs.get("source_objs").get(as_lookup_str(s)).to_ref()
+                        for s in v
+                    ]
                 elif k == "publication":
                     # single source object
-                    v = kwargs.get("source_objs").get(v).to_ref()
+                    v = kwargs.get("source_objs").get(as_lookup_str(v)).to_ref()
         elif k in ("data_set_owner", "data_generator", "data_documentor"):
             if "actor_objs" not in kwargs:
                 print("No Actors passed!!")
                 continue
             else:
-                a = kwargs.get("actor_objs").get(v)
+                a = kwargs.get("actor_objs").get(as_lookup_str(v))
                 if a:
                     v = a.to_ref()
                 else:
@@ -185,7 +191,12 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
                     continue
         elif k in ("reviews"):
             rev_list = []
-            for i, r in v.items():
+            if not isinstance(v, dict):
+                print(
+                    f"WARNING: reviews metadata must be a dict, got {type(v).__name__}"
+                )
+                continue
+            for _i, r in v.items():
                 rev = olca.Review(
                     review_type=r.get("reviewType"),
                     details=r.get("details"),
@@ -193,9 +204,9 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
                 if "report" in r:
                     report = list(r["report"].values())[0]
                     s = kwargs.get("source_objs")
-                    s = s.get(report).to_ref() if s else None
+                    s = s.get(as_lookup_str(report)).to_ref() if s else None
                     rev.report = s
-            rev_list.append(rev)
+                rev_list.append(rev)
             v = rev_list
         setattr(pdoc, k, v)
     if "creation_date" not in metadata.keys():

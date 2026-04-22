@@ -14,13 +14,14 @@ from esupy.location import extract_coordinates
 from esupy.util import make_uuid
 
 from flcac_utils.commons_api import get_single_object, read_commons_data
+from flcac_utils.meta_coerce import as_lookup_str, coerce_calendar_year
 
 
 def assign_year_to_meta(meta, year1, year2=None):
-    meta["valid_from"] = datetime(int(year1), 1, 1).isoformat(timespec="seconds")
-    meta["valid_until"] = datetime(int(year2 if year2 else year1), 12, 31).isoformat(
-        timespec="seconds"
-    )
+    y1 = coerce_calendar_year(year1)
+    y2 = coerce_calendar_year(year2 if year2 is not None else year1)
+    meta["valid_from"] = datetime(y1, 1, 1).isoformat(timespec="seconds")
+    meta["valid_until"] = datetime(y2, 12, 31).isoformat(timespec="seconds")
     return meta
 
 
@@ -99,18 +100,18 @@ def extract_actors_from_process_meta(process_meta: dict, **kwargs) -> (dict, dic
     new_actors = []
     for field in ("data_set_owner", "data_generator", "data_documentor"):
         actor_dict = process_meta.get(field, "")
-        if actor_dict == "":
+        if actor_dict in (None, ""):
             continue
         elif (isinstance(actor_dict, dict)) and (list(actor_dict.keys())[0] == "_NEW"):
             d = list(actor_dict.values())[0]
             if d not in new_actors:
                 new_actors.append(d)
-            process_meta[field] = d.get("name")
+            process_meta[field] = as_lookup_str(d.get("name"))
         elif isinstance(actor_dict, dict):
             d = actor_dict.copy()
             if d not in actor_list:
                 actor_list.append(d)
-            process_meta[field] = list(actor_dict.values())[0]
+            process_meta[field] = as_lookup_str(list(actor_dict.values())[0])
         else:
             raise ValueError(
                 " ".join(
@@ -160,14 +161,16 @@ def extract_sources_from_process_meta(
     all_source_dict = {}
     for field in ("sources", "publication"):
         source_dict = process_meta.get(field, "")
+        if source_dict in (None, ""):
+            continue
         if isinstance(source_dict, dict):
             all_source_dict.update(source_dict)
-            process_meta[field] = list(source_dict.values())[0]
+            process_meta[field] = as_lookup_str(list(source_dict.values())[0])
         elif isinstance(source_dict, list):
             names = []
             for s_dict in source_dict:
                 all_source_dict.update(s_dict)
-                names.append(list(s_dict.values())[0])
+                names.append(as_lookup_str(list(s_dict.values())[0]))
             process_meta[field] = names
     source_list = esupy.bibtex.generate_sources(
         bib_path=bib_path, bibids=all_source_dict

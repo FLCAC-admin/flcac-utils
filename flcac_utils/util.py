@@ -142,9 +142,14 @@ def extract_actors_from_process_meta(process_meta: dict, **kwargs) -> (dict, dic
         # Extract actors from API, recreate dictionary in correct format
         actors = read_commons_data(actor_dict, auth=kwargs.get("auth", False))
         for repo, a_list in actors.items():
-            actor_objs = {a.name: a for a in a_list}
-    if len(actor_list) != len(actor_objs):
-        print("WARNING: not all actors found")
+            actor_objs.update({a.name: a for a in a_list})
+    requested_actors = [list(a.values())[0] for a in actor_list]
+    missing_actors = sorted(set(requested_actors) - set(actor_objs.keys()))
+    if missing_actors:
+        print(
+            "WARNING: not all actors found. Missing: "
+            + ", ".join(missing_actors)
+        )
     # Generate and append new actor objs
     for d in new_actors:
         a = o.Actor.from_dict(d)

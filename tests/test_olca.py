@@ -5,6 +5,7 @@ Run with pytest (tmp output) or manually: python tests/test_olca.py
 """
 
 import tempfile
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -14,11 +15,11 @@ parent_path = Path(__file__).parent
 data_path = parent_path / "data"
 
 
-def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
+def run_electricity_export(out_path: Path) -> Path:
     """
     Load fixtures, validate, build flows/processes, write zip under out_path.
 
-    Returns (flows, processes, path_to_written_zip).
+    Returns path_to_written_zip.
     """
     df_olca = pd.read_csv(data_path / "test_electricity.csv")
 
@@ -75,23 +76,38 @@ def run_electricity_export(out_path: Path) -> tuple[dict, dict, Path]:
     zips = sorted(out_path.glob("test_electricity_olca2.0_*.zip"))
     if not zips:
         raise AssertionError(f"No zip written under {out_path}")
-    return flows, processes, zips[-1]
+    return zips[-1]
 
 
 def test_object_build(tmp_path):
     """Two grid processes (AR, GB), one shared product flow; zip in temp dir."""
-    flows, processes, zip_path = run_electricity_export(tmp_path)
+    zip_path = run_electricity_export(tmp_path)
 
-    assert len(flows) == 1, "fixture uses one FlowUUID for all exchanges"
-    assert len(processes) == 2, "Argentina and United Kingdom processes"
     assert zip_path.is_file()
     assert zip_path.suffix == ".zip"
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        names = zf.namelist()
+    flow_count = len(
+        [n for n in names if n.startswith("flows") and n.endswith(".json")]
+    )
+    process_count = len(
+        [n for n in names if n.startswith("process") and n.endswith(".json")]
+    )
+    source_count = len(
+        [n for n in names if n.startswith("source") and n.endswith(".json")]
+    )
+    actor_count = len(
+        [n for n in names if n.startswith("actor") and n.endswith(".json")]
+    )
+    assert flow_count == 1, "Expected 1 flow object in output zip"
+    assert process_count == 2, "Expected 2 process objects in output zip"
+    assert source_count == 3, "Expected 3 source objects in output zip"
+    assert actor_count == 2, "Expected 2 actor objects in output zip"
 
 
 if __name__ == "__main__":
     # Leave files on disk so you can inspect the zip (remove folder when done).
     out = Path(tempfile.mkdtemp(prefix="flcac_test_olca_"))
-    flows, processes, zip_path = run_electricity_export(out)
-    print(f"flows: {len(flows)}, processes: {len(processes)}")
+    zip_path = run_electricity_export(out)
     print(f"wrote: {zip_path}")
     print(f"output directory: {out}")

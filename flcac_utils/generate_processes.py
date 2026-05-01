@@ -340,6 +340,26 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
     return p
 
 
+def _coerce_exchange_optional_true_flag(v) -> bool:
+    """
+    True only for explicit truthy spreadsheet values.
+
+    Blank / NaN / None must be False: bare ``bool(float('nan'))`` is True in
+    Python (https://github.com/FLCAC-admin/flcac-utils/issues/20).
+    """
+    if isinstance(v, bool):
+        return v
+    if v is None or pd.isna(v):
+        return False
+    if isinstance(v, str):
+        return v.strip().lower() == "true"
+    if isinstance(v, numbers.Integral):
+        return v != 0
+    if isinstance(v, numbers.Real):
+        return v != 0.0
+    return False
+
+
 def make_exchanges(
     p: olca.Process, df: pd.DataFrame, flows: dict, process_db: pd.DataFrame = None
 ) -> olca.Process:
@@ -379,7 +399,9 @@ def make_exchanges(
         e.amount = row["amount"]
         _desc = row.get("description")
         e.description = "" if _desc is None or pd.isna(_desc) else _desc
-        e.is_avoided_product = bool(row.get("avoided_product", False))
+        e.is_avoided_product = _coerce_exchange_optional_true_flag(
+            row.get("avoided_product", False)
+        )
         e.unit = units.unit_ref(row["unit"])
         # ^^ needs to be a Ref not a str
         e.flow_property = units.property_ref(row["unit"])

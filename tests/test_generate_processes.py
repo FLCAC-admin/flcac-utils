@@ -96,3 +96,27 @@ def test_make_exchanges_description_non_null_preserved(process_name, flow_uuid):
     )
     make_exchanges(p, df, flows)
     assert p.exchanges[0].description == "emission note"
+
+
+def test_make_exchanges_avoided_product_nan_is_false(process_name, flow_uuid):
+    """Blank cells become NaN; must not set is_avoided_product True (gh #20)."""
+    flows = {flow_uuid: _minimal_flow(flow_uuid)}
+    p = olca.Process()
+    p.name = process_name
+    df = pd.DataFrame(
+        [
+            {
+                "ProcessName": process_name,
+                "FlowUUID": flow_uuid,
+                "reference": False,
+                "IsInput": True,
+                "amount": 1.0,
+                "unit": "kg",
+                "description": "",
+                "FlowType": "ELEMENTARY_FLOW",
+                "avoided_product": float("nan"),
+            }
+        ]
+    )
+    make_exchanges(p, df, flows)
+    assert p.exchanges[0].is_avoided_product is False

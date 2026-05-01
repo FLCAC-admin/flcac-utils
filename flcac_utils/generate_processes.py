@@ -118,6 +118,45 @@ def assert_no_exchange_self_default_provider(process: olca.Process) -> None:
         )
 
 
+def assert_distinct_dataset_ids_for_write_objects(
+    flows: dict,
+    processes: dict,
+    *extra: dict,
+) -> None:
+    """
+    Raise ValueError if any two olca root objects (non-empty ``id``) share the
+    same UUID across ``flows``, ``processes``, and any extra dicts passed for
+    writing (e.g. locations, sources, actors).
+
+    Uses each value's ``id`` (not only dict keys): ``flows`` / ``processes`` are
+    keyed by UUID, but ``*args`` maps (locations, sources, actors) use other
+    keys, so the dataset UUID lives on the object.
+    """
+    collections: list[tuple[str, dict]] = [
+        ("flows", flows),
+        ("processes", processes),
+        *[(f"args[{i}]", d) for i, d in enumerate(extra)],
+    ]
+    seen: dict[str, tuple[str, object]] = {}
+    for coll_name, d in collections:
+        if not isinstance(d, dict):
+            raise TypeError(
+                "write_objects expects dict[str, olca object] for flows, "
+                f"processes, and each arg; {coll_name!r} is {type(d).__name__}."
+            )
+        for k, v in d.items():
+            oid = norm_uuid(getattr(v, "id", None))
+            if not oid:
+                continue
+            if oid in seen:
+                prev_coll, prev_k = seen[oid]
+                raise ValueError(
+                    f"Duplicate dataset UUID {oid!r}: appears in {prev_coll!r} "
+                    f"(key {prev_k!r}) and in {coll_name!r} (key {k!r})."
+                )
+            seen[oid] = (coll_name, k)
+
+
 def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     """
     Return a list of violations where:
@@ -635,7 +674,12 @@ def write_objects(
     :args:
         additional dictionaries of olca objects where values are objects
         for writing to json-ld e.g., Sources, Actors, etc.
+
+    Raises ``ValueError`` if any two objects across ``flows``, ``processes``,
+    or ``args`` share the same non-empty dataset ``id`` (UUID).
     """
+    assert_distinct_dataset_ids_for_write_objects(flows, processes, *args)
+
     ## Attempt to retrieve FEDEFL so that UUIDs of exchange flows can be assessed for
     ## whether they exist in the FEDEFL.
     try:

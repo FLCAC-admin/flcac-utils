@@ -326,9 +326,14 @@ def make_exchanges(
             row = row.drop(labels=["amountFormula"], errors="ignore")
 
         e = olca.Exchange()
-        # Only add 'amountFormula' if present
         if "amountFormula" in row:
-            e.amount_formula = row["amountFormula"]
+            af = row["amountFormula"]
+            if isinstance(af, str):
+                stripped = af.strip()
+                if stripped and stripped.lower() != "nan":
+                    e.amount_formula = af
+            elif not pd.isna(af):
+                e.amount_formula = af
         e.flow = flows[row["FlowUUID"]].to_ref()
         e.is_quantitative_reference = bool(row["reference"])
         e.is_input = bool(row["IsInput"])

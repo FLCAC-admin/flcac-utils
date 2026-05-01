@@ -1,3 +1,5 @@
+.venv/
+.vscode/
 submission_tool/output*
 output/*
 electricity/yearly_full_release_long_format.csv

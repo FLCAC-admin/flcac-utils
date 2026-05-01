@@ -2,83 +2,160 @@
 # !pip install olca-schema
 
 
-import olca_schema as olca
-import olca_schema.zipio as zipio #for writing to json
-import olca_schema.units as units
-from datetime import datetime, time
-from typing import List
-import pandas as pd
-from esupy.util import make_uuid
-from esupy.location import olca_location_meta
+import numbers
+from datetime import datetime, time, timezone
 from pathlib import Path
-from flcac_utils.util import zero_pad_version, _set_base_attributes
+from typing import List
 
+import olca_schema as olca
+import olca_schema.units as units
+import olca_schema.zipio as zipio  # for writing to json
+import pandas as pd
+from esupy.location import olca_location_meta
+from esupy.util import make_uuid
 
-outPath = Path(__file__).parents[1] / 'output'
+from flcac_utils.meta_coerce import as_lookup_str, metadata_value_is_empty
+from flcac_utils.util import _set_base_attributes, norm_uuid, zero_pad_version
 
-'''
+outPath = Path(__file__).parents[1] / "output"
+
+"""
 Exchange schema lists fields that are required for progression of the script
-'''
+"""
 exchange_schema = {
-    "ProcessID": {'dtype': 'str', 'required': False},
-    "ProcessCategory": {'dtype': 'str', 'required': True},
-    "ProcessName": {'dtype': 'str', 'required': True},
-    "FlowUUID": {'dtype': 'str', 'required': True},
-    "FlowName": {'dtype': 'str', 'required': True},
-    "amountFormula": {'dtype': 'str', 'required': False},
-    "Context":  {'dtype': 'str', 'required': True},
-    "IsInput": {'dtype': 'bool', 'required': True},
-    "FlowType": {'dtype': 'str', 'required': True},
-    "reference":  {'dtype': 'bool', 'required': True},
-    "default_provider": {'dtype': 'str', 'required': False},
-    "description": {'dtype': 'str', 'required': False},
-    "amount":  {'dtype': 'float', 'required': True},
-    "unit":  {'dtype': 'str', 'required': True},
-    "avoided_product": {'dtype': 'bool', 'required': False},
-    "exchange_dqi": {'dtype': 'str', 'required': False},
+    "ProcessID": {"dtype": "str", "required": False},
+    "ProcessCategory": {"dtype": "str", "required": True},
+    "ProcessName": {"dtype": "str", "required": True},
+    "FlowUUID": {"dtype": "str", "required": True},
+    "FlowName": {"dtype": "str", "required": True},
+    "amountFormula": {"dtype": "str", "required": False},
+    "Context": {"dtype": "str", "required": True},
+    "IsInput": {"dtype": "bool", "required": True},
+    "FlowType": {"dtype": "str", "required": True},
+    "reference": {"dtype": "bool", "required": True},
+    "default_provider": {"dtype": "str", "required": False},
+    "description": {"dtype": "str", "required": False},
+    "amount": {"dtype": "float", "required": True},
+    "unit": {"dtype": "str", "required": True},
+    "avoided_product": {"dtype": "bool", "required": False},
+    "exchange_dqi": {"dtype": "str", "required": False},
     # "tag": {'dtype': 'str', 'required': False}
 }
 
-'''
-Parameter dictionary schema fields. Parameter dictionaries are stored in 
-in a list named 'parameters' within each process dictionary. 
-'''
-param_schema ={
-    'processName': {'dtype': 'str', 'required': True},
-    'formula': {'dtype': 'str', 'required': False}, # Required if dependent
-    'isInputParameter': {'dtype': 'bool', 'required': True}, # True if used in inputs; False if used in outputs
-    'name': {'dtype': 'str', 'required': True}, # (string) unique identifier; reference to connect to exchange
-    'value': {'dtype': 'float', 'required': False}, 
-    'description': {'dtype': 'str', 'required': False},
+"""
+Parameter dictionary schema fields. Parameter dictionaries are stored in
+in a list named 'parameters' within each process dictionary.
+"""
+param_schema = {
+    "processName": {"dtype": "str", "required": True},
+    "formula": {"dtype": "str", "required": False},  # Required if dependent
+    "isInputParameter": {
+        "dtype": "bool",
+        "required": True,
+    },  # True if used in inputs; False if used in outputs
+    "name": {
+        "dtype": "str",
+        "required": True,
+    },  # (string) unique identifier; reference to connect to exchange
+    "value": {"dtype": "float", "required": False},
+    "description": {"dtype": "str", "required": False},
 }
 
 # convert units to units in olca_schema.units
-unit_dict = {
-    "metric ton": "ton"
-}
+unit_dict = {"metric ton": "ton"}
 
 
 def validate_exchange_data(df):
     """Checks exchange dataframe for validity"""
-    reqd = set([k for k, v in exchange_schema.items()
-                if v['required'] == True])
+    reqd = set([k for k, v in exchange_schema.items() if v["required"]])
     if not reqd.issubset(set(df.columns)):
         print(reqd - set(df.columns))
 
     for c in reqd:
         if df[c].isna().any():
-            raise ValueError(f'ERROR: Missing data in {c}')
+            raise ValueError(f"ERROR: Missing data in {c}")
 
     ## validate units align with olca
-    x = {u: units.unit_ref(u) for u in set(df['unit'])}
-    keys = [k for k,v in x.items() if v is None]
+    x = {u: units.unit_ref(u) for u in set(df["unit"])}
+    keys = [k for k, v in x.items() if v is None]
     if keys:
-        raise ValueError('Incorrect units present in exchange data: ',
-                         f'{", ".join(keys)}')
+        raise ValueError(
+            "Incorrect units present in exchange data: ", f"{', '.join(keys)}"
+        )
     names = validate_reference_default_provider(df)
     if names:
-        raise ValueError('Default provider entered for reference flow in processes: ',
-                         names)
+        raise ValueError(
+            "Default provider entered for reference flow in processes: ", names
+        )
+
+
+def assert_no_exchange_self_default_provider(process: olca.Process) -> None:
+    """
+    Raise ValueError if any exchange on ``process`` uses this process as its
+    ``default_provider`` (self-loop).
+    """
+    pid = norm_uuid(getattr(process, "id", None))
+    if not pid:
+        return
+    pname = getattr(process, "name", None) or "(unnamed process)"
+    for i, ex in enumerate(getattr(process, "exchanges", None) or []):
+        dp = getattr(ex, "default_provider", None)
+        if dp is None:
+            continue
+        dpid = norm_uuid(getattr(dp, "id", None))
+        if not dpid or dpid != pid:
+            continue
+        flo = getattr(ex, "flow", None)
+        flabel = (
+            getattr(flo, "name", None)
+            or getattr(flo, "id", None)
+            or f"exchange index {i}"
+        )
+        raise ValueError(
+            f"Process {pname!r} (uuid={process.id}) lists itself as the default "
+            f"provider on the exchange for flow {flabel!r}. "
+            "Remove or change default_provider for that exchange."
+        )
+
+
+def assert_distinct_dataset_ids_for_write_objects(
+    flows: dict,
+    processes: dict,
+    *extra: dict,
+) -> None:
+    """
+    Raise ValueError if any two olca root objects (non-empty ``id``) share the
+    same UUID across ``flows``, ``processes``, and any extra dicts passed for
+    writing (e.g. locations, sources, actors).
+
+    Uses each value's ``id`` (not only dict keys): ``flows`` / ``processes`` are
+    keyed by UUID, but ``*args`` maps (locations, sources, actors) use other
+    keys, so the dataset UUID lives on the object.
+    """
+    collections: list[tuple[str, dict]] = [
+        ("flows", flows),
+        ("processes", processes),
+        *[(f"args[{i}]", d) for i, d in enumerate(extra)],
+    ]
+    seen: dict[str, tuple[str, object]] = {}
+    for coll_name, d in collections:
+        if not isinstance(d, dict):
+            raise TypeError(
+                "write_objects expects dict[str, olca object] for flows, "
+                f"processes, and each arg; {coll_name!r} is {type(d).__name__}."
+            )
+        for k, v in d.items():
+            oid = norm_uuid(getattr(v, "id", None))
+            if not oid:
+                continue
+            if oid in seen:
+                prev_coll, prev_k = seen[oid]
+                raise ValueError(
+                    f"Duplicate dataset UUID {oid!r}: appears in {prev_coll!r} "
+                    f"(key {prev_k!r}) and in {coll_name!r} (key {k!r})."
+                )
+            seen[oid] = (coll_name, k)
+
 
 def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     """
@@ -87,31 +164,41 @@ def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
       - default_provider exists and is filled (not NaN, not empty, not whitespace)
     """
     # Normalize the 'reference' column to booleans
-    ref_true = df['reference'].fillna(False).astype(bool)
+    ref_true = df["reference"].fillna(False).astype(bool)
 
     # Build a "filled" mask for default_provider only if the column exists
-    if 'default_provider' in df.columns:
+    if "default_provider" in df.columns:
         # Convert to string where notna, strip whitespace, then check non-empty
-        dp = df['default_provider']
+        dp = df["default_provider"]
         dp_filled = dp.notna() & (dp.astype(str).str.strip() != "")
     else:
         # Column missing => considered not filled for all rows
         dp_filled = pd.Series(False, index=df.index)
 
     violations_mask = ref_true & dp_filled
-    return df.loc[violations_mask, 'ProcessName'].astype(str).tolist()
+    return df.loc[violations_mask, "ProcessName"].astype(str).tolist()
+
+
+def _input_parameter_value_is_numeric(v) -> bool:
+    """True if v is a finite real scalar suitable for an input parameter value."""
+    if v is None or pd.isna(v):
+        return False
+    if isinstance(v, bool):
+        return False
+    return isinstance(v, numbers.Real)
 
 
 def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
     """
-    Get all parameter entries from a parameters dataframem, df_params. Convert rows into a
-    dictionary. Convert dictionary into an olca parameter object. Append 
-    parameter object to a list and return list.
-    
+    Get all parameter entries from a parameters dataframem, df_params.
+
+    Convert rows into a dictionary, then into an olca parameter object. Append
+    each parameter object to a list and return the list.
+
     The list of parameter objects is added to an olca process object.
     """
-    
-    if 'processName' not in df_params.columns:
+
+    if "processName" not in df_params.columns:
         raise KeyError("Parameter DataFrame must contain a 'processName' column.")
 
     params: List[olca.Parameter] = []
@@ -120,92 +207,156 @@ def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
         # Convert row to dict
         row_dict = row.to_dict()
         # Handle null formula / value keys based on value of isInputParameter
-        is_input = str(row_dict.get('isInputParameter', '')).strip().lower() == 'true'
+        is_input = str(row_dict.get("isInputParameter", "")).strip().lower() == "true"
         if is_input:
-            row_dict.pop('formula', None)
+            val = row_dict.get("value")
+            if not _input_parameter_value_is_numeric(val):
+                pname = row.get("processName", row_dict.get("processName"))
+                pkey = row.get("name", row_dict.get("name"))
+                raise ValueError(
+                    f"Input parameter {pkey!r} on process {pname!r} requires a numeric "
+                    f"value; got {type(val).__name__}: {val!r}."
+                )
+            row_dict.pop("formula", None)
         else:
-            row_dict.pop('value', None)
+            row_dict.pop("value", None)
         # Assign dict values
-        row_dict['@id'] = make_uuid([row['processName'], row['name']])
-        row_dict['parameterScope'] = 'PROCESS_SCOPE'
+        row_dict["@id"] = make_uuid([row["processName"], row["name"]])
+        row_dict["parameterScope"] = "PROCESS_SCOPE"
         # Build olca Prameter object
         obj = olca.Parameter.from_dict(row_dict)
         params.append(obj)
     return params
 
 
-def get_process_metadata(p: olca.Process,
-                         metadata: dict,
-                         **kwargs
-                         ) -> olca.Process:
+def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Process:
     """
     Generates and attaches process metadata to olca.Process p.
     kwargs may contain "source_objs", "actor_objs" which are dictionaries
     of olca objects with names as keys
+
+    When ``strict`` is True (default; set via ``build_process_dict(...,
+    strict_metadata=...)``),
+    missing lookups raise ``ValueError`` only if the corresponding object map was
+    passed (e.g. ``source_objs`` / ``actor_objs``). Omitted maps skip resolution
+    without error.
     """
+    strict = kwargs.get("strict", True)
+
+    def _resolve_ref(obj_dict, lookup, field_name):
+        obj = obj_dict.get(lookup) if obj_dict is not None else None
+        if obj is None:
+            msg = f"Missing {field_name} reference '{lookup}' for process '{p.name}'."
+            if strict:
+                raise ValueError(msg)
+            print(f"WARNING: {msg}")
+            return None
+        return obj.to_ref()
+
     pdoc = olca.ProcessDocumentation()
     for k, v in metadata.items():
         if isinstance(v, str):
-            if k not in ('data_set_owner', 'data_generator', 'data_documentor'):
-                v = v.rstrip() # remove trailing line breaks
+            if k not in ("data_set_owner", "data_generator", "data_documentor"):
+                v = v.rstrip()  # remove trailing line breaks
         if k in dir(p):
             # some metadata items attach directly to the process
+            if k == "version" and isinstance(v, (int, float)):
+                v = str(v)
             setattr(p, k, v)
-        elif k not in dir(pdoc):
-            print(f'WARNING: {k} not a process doc key')
             continue
-        elif (v is None) or (len(v) == 0):
+        elif k not in dir(pdoc):
+            print(f"WARNING: {k} not a process doc key")
+            continue
+        elif metadata_value_is_empty(v):
             continue  # no metadata to add, skip
-        elif k in ('sources', 'publication'):
-            if 'source_objs' not in kwargs:
-                print('No Sources passed!!')
+        elif k in ("sources", "publication"):
+            if "source_objs" not in kwargs or kwargs.get("source_objs") is None:
                 continue
-            else:
-                if k == 'sources':
-                    # list of source objects
-                    v = [kwargs.get('source_objs').get(s).to_ref() for s in v]
-                elif k == 'publication':
-                    # single source object
-                    v = kwargs.get('source_objs').get(v).to_ref()
-        elif k in ('data_set_owner', 'data_generator', 'data_documentor'):
-            if 'actor_objs' not in kwargs:
-                print('No Actors passed!!')
-                continue
-            else:
-                a = kwargs.get('actor_objs').get(v)
-                if a:
-                    v = a.to_ref()
-                else:
-                    print(f'Actor: `{v}` not found!')
+            source_objs = kwargs["source_objs"]
+            if k == "sources":
+                # list of source objects
+                refs = []
+                for s in v:
+                    sref = _resolve_ref(
+                        source_objs,
+                        as_lookup_str(s),
+                        "source",
+                    )
+                    if sref is not None:
+                        refs.append(sref)
+                v = refs
+            elif k == "publication":
+                # single source object
+                sref = _resolve_ref(source_objs, as_lookup_str(v), "publication")
+                if sref is None:
                     continue
-        elif k in ('reviews'):
+                v = sref
+        elif k in ("data_set_owner", "data_generator", "data_documentor"):
+            if "actor_objs" not in kwargs or kwargs.get("actor_objs") is None:
+                continue
+            actor_objs = kwargs["actor_objs"]
+            aref = _resolve_ref(actor_objs, as_lookup_str(v), "actor")
+            if aref is None:
+                continue
+            v = aref
+        elif k in ("reviews"):
             rev_list = []
-            for i, r in v.items():
-                rev = olca.Review(review_type = r.get('reviewType'),
-                                  details = r.get('details'),
-                                  )
-                if 'report' in r:
-                    report = list(r['report'].values())[0]
-                    s = kwargs.get('source_objs')
-                    s = s.get(report).to_ref() if s else None
-                    rev.report = s
-            rev_list.append(rev)
+            if not isinstance(v, dict):
+                print(
+                    f"WARNING: reviews metadata must be a dict, got {type(v).__name__}"
+                )
+                continue
+            for _i, r in v.items():
+                rev = olca.Review(
+                    review_type=r.get("reviewType"),
+                    details=r.get("details"),
+                )
+                if "report" in r:
+                    report = list(r["report"].values())[0]
+                    if "source_objs" not in kwargs or kwargs.get("source_objs") is None:
+                        rev.report = None
+                    else:
+                        rref = _resolve_ref(
+                            kwargs["source_objs"],
+                            as_lookup_str(report),
+                            "review report source",
+                        )
+                        rev.report = rref
+                rev_list.append(rev)
             v = rev_list
         setattr(pdoc, k, v)
-    if 'creation_date' not in metadata.keys():
+    if "creation_date" not in metadata.keys():
         # Set to noon local time
-        pdoc.creation_date = (datetime.combine(datetime.now().date(), time(12))
-                              .isoformat(timespec='seconds'))
+        pdoc.creation_date = datetime.combine(
+            datetime.now().date(), time(12)
+        ).isoformat(timespec="seconds")
     p.process_documentation = pdoc
     return p
 
 
+def _coerce_exchange_optional_true_flag(v) -> bool:
+    """
+    True only for explicit truthy spreadsheet values.
+
+    Blank / NaN / None must be False: bare ``bool(float('nan'))`` is True in
+    Python (https://github.com/FLCAC-admin/flcac-utils/issues/20).
+    """
+    if isinstance(v, bool):
+        return v
+    if v is None or pd.isna(v):
+        return False
+    if isinstance(v, str):
+        return v.strip().lower() == "true"
+    if isinstance(v, numbers.Integral):
+        return v != 0
+    if isinstance(v, numbers.Real):
+        return v != 0.0
+    return False
+
+
 def make_exchanges(
-        p: olca.Process,
-        df: pd.DataFrame,
-        flows: dict,
-        process_db: pd.DataFrame = None
-        ) -> olca.Process:
+    p: olca.Process, df: pd.DataFrame, flows: dict, process_db: pd.DataFrame = None
+) -> olca.Process:
     """
     Creates and attaches exchanges for olca.Process p. Requires flow_dict and
     process_db as reference to other objects available within the database.
@@ -213,40 +364,51 @@ def make_exchanges(
     if not process_db:
         process_db = pd.DataFrame()
     exch_lst = []
-    for index, row in df.query('ProcessName==@p.name').iterrows():
-        # Check if row is associated with reference flow 
-        ref_val = row.get('reference', None)
-        is_reference = (
-            (ref_val is True) or
-            (isinstance(ref_val, str) and ref_val.strip().lower() == 'true')
+    for index, row in df.query("ProcessName==@p.name").iterrows():
+        # Check if row is associated with reference flow
+        ref_val = row.get("reference", None)
+        is_reference = (ref_val is True) or (
+            isinstance(ref_val, str) and ref_val.strip().lower() == "true"
         )
-        
+
         # If reference is true and amountFormula is NaN then remove amountFormula
-        if is_reference and (pd.isna(row.get('amountFormula', None)) or row.get('amountFormula', None) == 'nan'):
-            row = row.drop(labels=['amountFormula'], errors='ignore')
-            
+        if is_reference and (
+            pd.isna(row.get("amountFormula", None))
+            or row.get("amountFormula", None) == "nan"
+        ):
+            row = row.drop(labels=["amountFormula"], errors="ignore")
+
         e = olca.Exchange()
-        # Only add 'amountFormula' if present
-        if 'amountFormula' in row:
-            e.amount_formula = row['amountFormula']
-        e.flow = flows[row['FlowUUID']].to_ref()
-        e.is_quantitative_reference = bool(row['reference'])
-        e.is_input = bool(row['IsInput'])
-        e.amount = row['amount']
-        e.description = row.get('description')
-        e.is_avoided_product = bool(row.get('avoided_product', False))
-        e.unit = units.unit_ref(row['unit'])
+        if "amountFormula" in row:
+            af = row["amountFormula"]
+            if isinstance(af, str):
+                stripped = af.strip()
+                if stripped and stripped.lower() != "nan":
+                    e.amount_formula = af
+            elif not pd.isna(af):
+                e.amount_formula = af
+        e.flow = flows[row["FlowUUID"]].to_ref()
+        e.is_quantitative_reference = bool(row["reference"])
+        e.is_input = bool(row["IsInput"])
+        e.amount = row["amount"]
+        _desc = row.get("description")
+        e.description = "" if _desc is None or pd.isna(_desc) else _desc
+        e.is_avoided_product = _coerce_exchange_optional_true_flag(
+            row.get("avoided_product", False)
+        )
+        e.unit = units.unit_ref(row["unit"])
         # ^^ needs to be a Ref not a str
-        e.flow_property = units.property_ref(row['unit'])
+        e.flow_property = units.property_ref(row["unit"])
         # ^^ required when it is not the reference flow property of the flow
-        if 'exchange_dqi' in row and p.exchange_dq_system is not None:
-            e.dq_entry = row['exchange_dqi']
-        if 'default_provider' in row and (pd.notna(row['default_provider']) and
-                                          row['default_provider'] != ''):
+        if "exchange_dqi" in row and p.exchange_dq_system is not None:
+            e.dq_entry = row["exchange_dqi"]
+        if "default_provider" in row and (
+            pd.notna(row["default_provider"]) and row["default_provider"] != ""
+        ):
             # Requires identifying the UUID of the default provider, but
             # TODO then how do you assign a provider from wihtin the new data?
             dp = olca.Process()
-            dp.id = row['default_provider']
+            dp.id = row["default_provider"]
             # dp_row = process_db.loc[process_db['ID'] == row['default_provider']]
             # if len(dp_row) == 0:  # Checks for populated default provider field
             #     if row['default_provider'] in df['ProcessID'].values:
@@ -264,9 +426,9 @@ def make_exchanges(
     return p
 
 
-def build_flow_dict(df: pd.DataFrame,
-                    tech_flows_db: pd.DataFrame=None
-                    ) -> tuple[dict, list]:
+def build_flow_dict(
+    df: pd.DataFrame, tech_flows_db: pd.DataFrame = None
+) -> tuple[dict, list]:
     """
     Creates a dictionary of olca.Flow objects with UUID as dictionary key and a
         list of UUIDs indicating which new flows need to be written to JSON.
@@ -282,47 +444,53 @@ def build_flow_dict(df: pd.DataFrame,
     # Flows must exist before exchanges can be created
     # https://greendelta.github.io/olca-ipc.py/olca/index.html#olca.flow_of
     flows = {}
-    print('Creating Dictionary of flows')
+    print("Creating Dictionary of flows")
 
     ## Attempt to retrieve FEDEFL so that UUIDs of exchange flows can be assessed for
     ## whether they exist in the FEDEFL.
     try:
         import fedelemflowlist
+
         fl = fedelemflowlist.get_flows()
     except (ImportError, AttributeError):
         print("FEDEFL not available, UUIDs will not be checked")
         fl = None
 
     new_flows_to_write = []
-    for index, row in df.drop_duplicates('FlowUUID').iterrows():
-
+    for index, row in df.drop_duplicates("FlowUUID").iterrows():
         # If flow UUID is neither in FEDEFL or database of technospheric flows
         # then it needs to be created based on user supplied data
-        if (fl is not None and (row['FlowUUID'] not in fl['Flow UUID'].values) and
-                (tech_flows_db is None or
-                    row['FlowUUID'] not in tech_flows_db['UUID'].values)):
-    
-            print(f'Creating new flow: {row["FlowName"]}')
+        if (
+            fl is not None
+            and (row["FlowUUID"] not in fl["Flow UUID"].values)
+            and (
+                tech_flows_db is None
+                or row["FlowUUID"] not in tech_flows_db["UUID"].values
+            )
+        ):
+            print(f"Creating new flow: {row['FlowName']}")
             flow = olca.Flow()
-            if not pd.isna(row['FlowUUID']):
-                flow.id = row['FlowUUID']
+            if not pd.isna(row["FlowUUID"]):
+                flow.id = row["FlowUUID"]
             else:
-                flow.id = ''
-            flow = _set_base_attributes(flow, row['FlowName'])
-            flow.flow_properties = [olca.FlowPropertyFactor(
-                is_ref_flow_property=True,
-                conversion_factor=1.0,
-                flow_property=units.property_ref(row["unit"]))
+                flow.id = ""
+            flow = _set_base_attributes(flow, row["FlowName"])
+            flow.flow_properties = [
+                olca.FlowPropertyFactor(
+                    is_ref_flow_property=True,
+                    conversion_factor=1.0,
+                    flow_property=units.property_ref(row["unit"]),
+                )
             ]
-            flow.category = row['Context']
-            if row['FlowType'] == 'PRODUCT_FLOW':
+            flow.category = row["Context"]
+            if row["FlowType"] == "PRODUCT_FLOW":
                 flow.flow_type = olca.FlowType.PRODUCT_FLOW
-            elif row['FlowType'] == 'WASTE_FLOW':
+            elif row["FlowType"] == "WASTE_FLOW":
                 flow.flow_type = olca.FlowType.WASTE_FLOW
-            elif row['FlowType'] == 'ELEMENTARY_FLOW':
+            elif row["FlowType"] == "ELEMENTARY_FLOW":
                 flow.flow_type = olca.FlowType.ELEMENTARY_FLOW
-            if 'Tag' in row:
-                tag = row['Tag']
+            if "Tag" in row:
+                tag = row["Tag"]
                 if isinstance(tag, str):
                     tag = [tag]
                 if isinstance(tag, list):
@@ -330,39 +498,41 @@ def build_flow_dict(df: pd.DataFrame,
             # To-do: Add check on valid flow type
             flows[flow.id] = flow
             new_flows_to_write.append(flow.id)
-    
+
         # If flow UUID is in the FEDEFL
-        elif (fl is not None and (row['FlowUUID'] in fl['Flow UUID'].values)):
+        elif fl is not None and (row["FlowUUID"] in fl["Flow UUID"].values):
             ## don't need full flow metadata will be pulled directly from
             ## fedelemflowlist
             flow = olca.Flow()
-            flow.name = fl.query('`Flow UUID` == @row.FlowUUID')['Flowable'].item()
-            flow.id = row['FlowUUID']
+            flow.name = fl.query("`Flow UUID` == @row.FlowUUID")["Flowable"].item()
+            flow.id = row["FlowUUID"]
             flow.flow_type = olca.FlowType.ELEMENTARY_FLOW
             flows[flow.id] = flow
-    
+
         # If flow UUID is in database technospheric flow list
-        elif row['FlowUUID'] in tech_flows_db['UUID'].values:
+        elif row["FlowUUID"] in tech_flows_db["UUID"].values:
             ## existing technosphere flows are not written to json so full flow
             ## metadata is not needed
             flow = olca.Flow()
-            flow.name = tech_flows_db.query('UUID == @row.FlowUUID')['FlowName'].item()
-            flow.id = row['FlowUUID']
-            if row['FlowType'] == 'PRODUCT_FLOW':
+            flow.name = tech_flows_db.query("UUID == @row.FlowUUID")["FlowName"].item()
+            flow.id = row["FlowUUID"]
+            if row["FlowType"] == "PRODUCT_FLOW":
                 flow.flow_type = olca.FlowType.PRODUCT_FLOW
-            elif row['FlowType'] == 'WASTE_FLOW':
+            elif row["FlowType"] == "WASTE_FLOW":
                 flow.flow_type = olca.FlowType.WASTE_FLOW
             flows[flow.id] = flow
         else:
             raise ValueError
-    return(flows, new_flows_to_write)
+    return (flows, new_flows_to_write)
 
 
-def build_process_dict(df: pd.DataFrame,
-                       flows: dict[str, olca.Flow],
-                       meta: dict[str, str],
-                       **kwargs
-                       ) -> dict:
+def build_process_dict(
+    df: pd.DataFrame,
+    flows: dict[str, olca.Flow],
+    meta: dict[str, str],
+    strict_metadata: bool = True,
+    **kwargs,
+) -> dict:
     """
     Creates a dictionary of olca.Process objects with UUID as dictionary key.
 
@@ -374,6 +544,10 @@ def build_process_dict(df: pd.DataFrame,
         source_objs: dict[str, olca.Source]
         actor_objs: dict[str, olca.Actor]
         dq_objs: dict[str, olca.DQSystem]
+    :param strict_metadata: default True. If True, a missing name in
+        ``source_objs`` / ``actor_objs`` (when that map is passed) raises
+        ``ValueError``. Omitted ``source_objs`` / ``actor_objs`` skips resolution
+        without error.
     :return: dict of olca.Process objects with UUID as dictionary key
     """
     ## This code block is useful when considering allocation (see AISI work)
@@ -396,52 +570,57 @@ def build_process_dict(df: pd.DataFrame,
     # Create Dictionary of all processes
     # https://greendelta.github.io/olca-ipc.py/olca/schema.html#olca.schema.Process
     processes = {}
-    print('Creating Dictionary of processes\n')
-    cols = [c for c in ['ProcessID', 'ProcessCategory', 'ProcessName', 'location']
-            if c in df.columns]
+    print("Creating Dictionary of processes\n")
+    cols = [
+        c
+        for c in ["ProcessID", "ProcessCategory", "ProcessName", "location"]
+        if c in df.columns
+    ]
     for i, row in df[cols].drop_duplicates().iterrows():
-        name = row['ProcessName']
+        name = row["ProcessName"]
         print(name)
         p0 = olca.Process()
         p0 = _set_base_attributes(p0, name)
-        if 'version' in kwargs:
-            p0.version = zero_pad_version(kwargs['version'])
+        if "version" in kwargs:
+            p0.version = zero_pad_version(kwargs["version"])
         # Make sure UUID is always set based on process name so it never changes
-        p0.id = make_uuid(name) if 'ProcessID' not in cols else row['ProcessID']
+        p0.id = make_uuid(name) if "ProcessID" not in cols else row["ProcessID"]
         p0.process_type = olca.ProcessType.UNIT_PROCESS
-        p0.category = row['ProcessCategory']
+        p0.category = row["ProcessCategory"]
         p0.default_allocation_method = olca.AllocationType.PHYSICAL_ALLOCATION
 
-        if kwargs.get('loc_objs'):
-            loc = kwargs['loc_objs'].get(row['location'])
+        if kwargs.get("loc_objs"):
+            loc = kwargs["loc_objs"].get(row["location"])
             if loc:
                 p0.location = loc.to_ref()
 
-        if kwargs.get('dq_objs'):
-            dq = kwargs['dq_objs'].get('Process')
+        if kwargs.get("dq_objs"):
+            dq = kwargs["dq_objs"].get("Process")
             p0.dq_system = dq.to_ref() if dq else None
-            dq = kwargs['dq_objs'].get('Flow')
+            dq = kwargs["dq_objs"].get("Flow")
             p0.exchange_dq_system = dq.to_ref() if dq else None
-            
-        if 'df_params' in kwargs:
-            df_params = kwargs['df_params']
-            p0.parameters = make_param_list(df_params.query('processName == @name'))
-            
+
+        if "df_params" in kwargs:
+            df_params = kwargs["df_params"]
+            p0.parameters = make_param_list(df_params.query("processName == @name"))
+
         # print('Creating Metadata for Process', p)
-        p0 = get_process_metadata(p = p0, metadata = meta, **kwargs)
-        print('Creating Exchanges for Process', name)
-        p0 = make_exchanges(p = p0, df = df,
-                            flows = flows,
-                            # process_db = process_db)
-                            process_db = None)
-        print('\n')
+        p0 = get_process_metadata(p=p0, metadata=meta, strict=strict_metadata, **kwargs)
+        print("Creating Exchanges for Process", name)
+        p0 = make_exchanges(
+            p=p0,
+            df=df,
+            flows=flows,
+            # process_db = process_db)
+            process_db=None,
+        )
+        assert_no_exchange_self_default_provider(p0)
+        print("\n")
         processes[p0.id] = p0
     return processes
 
 
-def build_location_dict(df: pd.DataFrame,
-                        locations: dict[str, dict]
-                        ) -> dict:
+def build_location_dict(df: pd.DataFrame, locations: dict[str, dict]) -> dict:
     """
     Creates a dictionary of olca.Location objects with ISO-code as dictionary key.
 
@@ -450,50 +629,57 @@ def build_location_dict(df: pd.DataFrame,
     :return: dict of olca.Location objects with ISO-code as dictionary key
     """
     loc_objs = {}
-    print('Creating dictionary of Locations...')
+    print("Creating dictionary of Locations...")
 
-    loc_meta = olca_location_meta().drop(columns='Category')
+    loc_meta = olca_location_meta().drop(columns="Category")
     loc_meta.columns = loc_meta.columns.str.lower()
-    loc_meta = (loc_meta.rename(columns={'id': '@id'})
-                        .set_index('code')
-                        .to_dict(orient='index'))
-    for loc_code in df['location'].drop_duplicates().dropna():
-        if loc_code == '': continue
+    loc_meta = (
+        loc_meta.rename(columns={"id": "@id"}).set_index("code").to_dict(orient="index")
+    )
+    for loc_code in df["location"].drop_duplicates().dropna():
+        if loc_code == "":
+            continue
         meta = loc_meta.get(loc_code)
-        properties = locations.get(loc_code, {}).get('properties')
+        properties = locations.get(loc_code, {}).get("properties")
         # consistent with olca v2.0 ref data, update lat/long from ecoinvent geoJSONs
-        meta.update({k: properties[k] for k in ['latitude', 'longitude']
-                     if (properties and k in properties)})
+        meta.update(
+            {
+                k: properties[k]
+                for k in ["latitude", "longitude"]
+                if (properties and k in properties)
+            }
+        )
         loc = olca.Location().from_dict(meta)
         loc.code = loc_code
-        loc.geometry = locations.get(loc_code, {}).get('geometry')
+        loc.geometry = locations.get(loc_code, {}).get("geometry")
         loc_objs[loc_code] = loc
     return loc_objs
 
 
-def _write_obj(
-        file: str,
-        obj: dict,
-        path: Path = outPath
-        ):
+def _write_obj(file: str, obj: dict, path: Path = outPath):
     """Creates a zip json from dictionary of olca obj e.g. file = 'json.zip'"""
     with zipio.ZipWriter(path / file) as W:
         for x in obj.values():
             if x.last_change is None:
-                x.last_change = (datetime.combine(
-                    datetime.utcnow().date(), time(12)).isoformat() + 'Z')
+                x.last_change = (
+                    datetime.combine(
+                        datetime.now(timezone.utc).date(), time(12)
+                    ).isoformat()
+                    + "Z"
+                )
             if x.version is None:
-                x.version = '00.00.001'
+                x.version = "00.00.001"
             W.write(x)
 
 
-def write_objects(name: str,
-                  flows: dict[str, olca.Flow],
-                  new_flows_to_write: list,
-                  processes: dict[str, olca.Process],
-                  *args,
-                  out_path=outPath
-                  ):
+def write_objects(
+    name: str,
+    flows: dict[str, olca.Flow],
+    new_flows_to_write: list,
+    processes: dict[str, olca.Process],
+    *args,
+    out_path=outPath,
+):
     """
     Writes a collection of objects to json-ld to the out_path
 
@@ -504,32 +690,38 @@ def write_objects(name: str,
     :args:
         additional dictionaries of olca objects where values are objects
         for writing to json-ld e.g., Sources, Actors, etc.
+
+    Raises ``ValueError`` if any two objects across ``flows``, ``processes``,
+    or ``args`` share the same non-empty dataset ``id`` (UUID).
     """
+    assert_distinct_dataset_ids_for_write_objects(flows, processes, *args)
+
     ## Attempt to retrieve FEDEFL so that UUIDs of exchange flows can be assessed for
     ## whether they exist in the FEDEFL.
     try:
         import fedelemflowlist
+
         fl = fedelemflowlist.get_flows()
     except (ImportError, AttributeError):
         print("FEDEFL not available, UUIDs will not be checked")
         fl = None
 
     # generate flow lists to write
-    flowlist = fl.query('`Flow UUID` in @flows.keys()')
+    flowlist = fl.query("`Flow UUID` in @flows.keys()")
     t_flowlist = {k: v for k, v in flows.items() if k in new_flows_to_write}
-    
+
     # Write JSON -- IMPORT into database with **Units and Flow Properties**
     # Select "Update data sets with newer versions" to replace any created flows
     # and processes, but not any exisiting technosphere flows
-    
+
     timestr = datetime.now().strftime("%Y%m%d-%H%M%S")
-    json_file = f'{name}_olca2.0_{timestr}.zip'
-    
+    json_file = f"{name}_olca2.0_{timestr}.zip"
+
     # Remove existing json (otherwise it gets extended)
     (out_path / json_file).unlink(missing_ok=True)
     # Create output folder if it doesn't exist
     out_path.mkdir(parents=False, exist_ok=True)
-    print(f"Writing json to {out_path/json_file}")
+    print(f"Writing json to {out_path / json_file}")
     # write flows directly from flow list based on those found in processes
     fedelemflowlist.write_jsonld(flowlist, path=out_path / json_file)
     # write tech flows

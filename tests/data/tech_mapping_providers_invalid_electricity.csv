@@ -1,0 +1,2 @@
+SourceRepoName,SourceFlowName,SourceFlowUUID,SourceFlowContext,SourceUnit,MatchCondition,ConversionFactor,TargetRepoName,TargetFlowName,TargetUnit,Provider,Bridge,BridgeFlowName,Mapper,Verifier,LastUpdated,ConversionSource
+test,Electricity,,,btu,=,1,US Electricity Baseline,"Electricity, AC, 120 V",btu,Electricity; at grid; consumption mix - US - US,FALSE,,,,,

@@ -146,10 +146,7 @@ def extract_actors_from_process_meta(process_meta: dict, **kwargs) -> (dict, dic
     requested_actors = [list(a.values())[0] for a in actor_list]
     missing_actors = sorted(set(requested_actors) - set(actor_objs.keys()))
     if missing_actors:
-        print(
-            "WARNING: not all actors found. Missing: "
-            + ", ".join(missing_actors)
-        )
+        print("WARNING: not all actors found. Missing: " + ", ".join(missing_actors))
     # Generate and append new actor objs
     for d in new_actors:
         a = o.Actor.from_dict(d)

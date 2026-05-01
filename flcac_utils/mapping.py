@@ -37,9 +37,7 @@ def assert_provider_supplies_target_flow(
         if norm_uuid(getattr(flo, "id", None)) == want:
             return
 
-    ctx = (
-        f" (source flow {source_flow_name!r})" if source_flow_name is not None else ""
-    )
+    ctx = f" (source flow {source_flow_name!r})" if source_flow_name is not None else ""
     raise ValueError(
         f"Default provider {provider_name!r} does not supply target flow "
         f"{target_flow_name!r} (uuid={target_flow_id}){ctx}. "

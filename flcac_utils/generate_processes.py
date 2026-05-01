@@ -246,10 +246,7 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
     def _resolve_ref(obj_dict, lookup, field_name):
         obj = obj_dict.get(lookup) if obj_dict is not None else None
         if obj is None:
-            msg = (
-                f"Missing {field_name} reference '{lookup}' "
-                f"for process '{p.name}'."
-            )
+            msg = f"Missing {field_name} reference '{lookup}' for process '{p.name}'."
             if strict:
                 raise ValueError(msg)
             print(f"WARNING: {msg}")
@@ -316,10 +313,7 @@ def get_process_metadata(p: olca.Process, metadata: dict, **kwargs) -> olca.Proc
                 )
                 if "report" in r:
                     report = list(r["report"].values())[0]
-                    if (
-                        "source_objs" not in kwargs
-                        or kwargs.get("source_objs") is None
-                    ):
+                    if "source_objs" not in kwargs or kwargs.get("source_objs") is None:
                         rev.report = None
                     else:
                         rref = _resolve_ref(
@@ -611,9 +605,7 @@ def build_process_dict(
             p0.parameters = make_param_list(df_params.query("processName == @name"))
 
         # print('Creating Metadata for Process', p)
-        p0 = get_process_metadata(
-            p=p0, metadata=meta, strict=strict_metadata, **kwargs
-        )
+        p0 = get_process_metadata(p=p0, metadata=meta, strict=strict_metadata, **kwargs)
         print("Creating Exchanges for Process", name)
         p0 = make_exchanges(
             p=p0,

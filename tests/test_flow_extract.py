@@ -30,8 +30,7 @@ def test_flow_extract_write_zip(df_olca, tmp_path):
     from flcac_utils.util import extract_flows
 
     flow_dict = extract_flows(
-        {"USLCI": ["Diesel; dispensed at pump",
-                   "Not a flow"]},
+        {"USLCI": ["Diesel; dispensed at pump", "Not a flow"]},
         add_tags=False,
         auth=False,
     )

@@ -4,7 +4,7 @@ Supporting functions
 
 import math
 import zipfile
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from pathlib import Path
 
 import esupy.bibtex
@@ -41,7 +41,7 @@ def _set_base_attributes(entity, name: str):
     # entity.version = '00.00.001'
     # set to noon local time
     entity.last_change = (
-        datetime.combine(datetime.utcnow().date(), time(12)).isoformat() + "Z"
+        datetime.combine(datetime.now(timezone.utc).date(), time(12)).isoformat() + "Z"
     )
     return entity
 

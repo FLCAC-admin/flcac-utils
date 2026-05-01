@@ -3,7 +3,7 @@
 
 
 import numbers
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from pathlib import Path
 from typing import List
 
@@ -648,7 +648,9 @@ def _write_obj(file: str, obj: dict, path: Path = outPath):
         for x in obj.values():
             if x.last_change is None:
                 x.last_change = (
-                    datetime.combine(datetime.utcnow().date(), time(12)).isoformat()
+                    datetime.combine(
+                        datetime.now(timezone.utc).date(), time(12)
+                    ).isoformat()
                     + "Z"
                 )
             if x.version is None:

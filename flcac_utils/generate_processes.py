@@ -2,6 +2,7 @@
 # !pip install olca-schema
 
 
+import numbers
 from datetime import datetime, time
 from pathlib import Path
 from typing import List
@@ -139,6 +140,15 @@ def validate_reference_default_provider(df: pd.DataFrame) -> List[str]:
     return df.loc[violations_mask, "ProcessName"].astype(str).tolist()
 
 
+def _input_parameter_value_is_numeric(v) -> bool:
+    """True if v is a finite real scalar suitable for an input parameter value."""
+    if v is None or pd.isna(v):
+        return False
+    if isinstance(v, bool):
+        return False
+    return isinstance(v, numbers.Real)
+
+
 def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
     """
     Get all parameter entries from a parameters dataframem, df_params.
@@ -160,6 +170,14 @@ def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
         # Handle null formula / value keys based on value of isInputParameter
         is_input = str(row_dict.get("isInputParameter", "")).strip().lower() == "true"
         if is_input:
+            val = row_dict.get("value")
+            if not _input_parameter_value_is_numeric(val):
+                pname = row.get("processName", row_dict.get("processName"))
+                pkey = row.get("name", row_dict.get("name"))
+                raise ValueError(
+                    f"Input parameter {pkey!r} on process {pname!r} requires a numeric "
+                    f"value; got {type(val).__name__}: {val!r}."
+                )
             row_dict.pop("formula", None)
         else:
             row_dict.pop("value", None)

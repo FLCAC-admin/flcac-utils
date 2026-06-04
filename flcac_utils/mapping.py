@@ -244,7 +244,7 @@ def apply_tech_flow_mapping(
             )
         )
     )
-    cond2 = cond * (not df["bridge"])
+    cond2 = cond & ~df["bridge"].fillna(False).astype(bool)
     df = (
         df
         ## Some modifications don't apply to flows that are bridged

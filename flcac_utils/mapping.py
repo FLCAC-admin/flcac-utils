@@ -308,12 +308,13 @@ def apply_tech_flow_mapping(
         )
     )
 
+    bridge_mask = df["bridge"].fillna(False).astype(bool)
     df = (
         df
         ## Make some special adjustments to providers for bridge flows
         .assign(
             default_provider_process=lambda x: np.where(
-                x["bridge"],
+                bridge_mask,
                 x.apply(
                     lambda z: create_bridge_name(z["repo"], z["bridge_flow_name"]),
                     axis=1,
@@ -323,19 +324,19 @@ def apply_tech_flow_mapping(
         )
         .assign(
             default_provider=lambda x: np.where(
-                x["bridge"],
+                bridge_mask,
                 x["default_provider_process"].apply(make_uuid),
                 x["default_provider"],
             )
         )
         .assign(
             FlowName=lambda x: np.where(
-                x["bridge"], x["bridge_flow_name"], x["FlowName"]
+                bridge_mask, x["bridge_flow_name"], x["FlowName"]
             )
         )
         .assign(
             FlowUUID=lambda x: np.where(
-                x["bridge"], x["FlowName"].apply(make_uuid), x["FlowUUID"]
+                bridge_mask, x["FlowName"].apply(make_uuid), x["FlowUUID"]
             )
         )
     )

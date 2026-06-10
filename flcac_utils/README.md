@@ -75,6 +75,12 @@ flow_dict, flow_objs, provider_dict = prepare_tech_flow_mappings(
 from flcac_utils.mapping import apply_tech_flow_mapping, create_bridge_processes
 df_olca = apply_tech_flow_mapping(df_olca, flow_dict, flow_objs, provider_dict)
 df_bridge = create_bridge_processes(df_olca, flow_dict, flow_objs)
+
+#%% After writing flows from your df, replace those you've pulled from the API
+api_flows = {flow.id: flow for k, flow in flow_objs.items()}
+if not(flows.keys() | api_flows.keys()) == flows.keys():
+    print('Warning, some flows accessed from API not in your dataset')
+flows.update(api_flows)
 ```
 
 - Actors can be referenced and assigned directly from the commons via the API using

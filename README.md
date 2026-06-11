@@ -9,3 +9,5 @@ An examples of using this package for developing on-road transportat unit proces
 Recommend installing editably by cloning the repository, navigating to the directory and using
 `pip install -e .`
 
+For tests and linting: `pip install -e ".[dev]"`, then `ruff format flcac_utils tests`, `ruff check flcac_utils tests`, and `pytest`. Style rules and **88-character** line length are in `pyproject.toml`.
+

@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="flcac_utils",
-    version="0.3.0",
+    version="0.4.0",
     packages=["flcac_utils"],
     include_package_data=True,
     python_requires=">=3.9",
@@ -14,5 +14,11 @@ setup(
                       "numpy>=2.1",
                       "pyyaml>=5.3"
                       ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "ruff>=0.4",
+        ],
+    },
     # description=''
 )

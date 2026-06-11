@@ -37,9 +37,9 @@ CORRIM:
   owner: 'CORRIM'
   repo: 'Forestry_and_forest_products'
 
-Woody Biomass:
-  owner: 'US_Forest_Service_Forest_Products_Lab'
-  repo: 'Woody_biomass'
+# Woody Biomass:
+#   owner: 'US_Forest_Service_Forest_Products_Lab'
+#   repo: 'Woody_biomass'
 
 Forestry and Forest Products:
   owner: 'US_Forest_Service_Forest_Products_Lab'

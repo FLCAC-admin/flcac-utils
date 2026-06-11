@@ -2,8 +2,9 @@
 Metadata
 """
 
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 parent_path = Path(__file__).parent
 
@@ -30,16 +31,17 @@ metadata_keys = [
     "data_documentor",
     "publication",
     "restrictions_description",
-    ]
+]
 
 metadata_match = {
-    'Time Start Date': 'valid_from',
-    'Time End Date': 'valid_until',
-    'LCI Method': 'inventory_method_description',
-    'Data Completeness': 'completeness_description',
-    'Sampling Procedure': 'sampling_description',
-    'Access and Use Restrictions': 'use_advice',
-    }
+    "Time Start Date": "valid_from",
+    "Time End Date": "valid_until",
+    "LCI Method": "inventory_method_description",
+    "Data Completeness": "completeness_description",
+    "Sampling Procedure": "sampling_description",
+    "Access and Use Restrictions": "use_advice",
+}
+
 
 def read_tabular_metadata(df) -> dict:
     """Reads metadata from tabular format where the column headers are process names
@@ -49,10 +51,7 @@ def read_tabular_metadata(df) -> dict:
 
     # Normalize function
     def normalize(s):
-        return (s.lower()
-                .replace("_", " ")
-                .strip()
-                )
+        return s.lower().replace("_", " ").strip()
 
     # Create mapping of row index names to target metadata keys
     mapping = {}
@@ -63,7 +62,7 @@ def read_tabular_metadata(df) -> dict:
             if normalize(key) == norm_row:
                 mapping[index] = key
                 break
-            elif normalize(key).replace(' description', '') == norm_row:
+            elif normalize(key).replace(" description", "") == norm_row:
                 mapping[index] = key
                 break
         else:
@@ -74,18 +73,31 @@ def read_tabular_metadata(df) -> dict:
     # Build dictionary of dictionaries
     d = {}
     for col in df.columns:
-        d[col] = {mapping[idx]: ("" if pd.isna(val) else val)
-                  for idx, val in df[col].items() if idx in mapping}
+        d[col] = {
+            mapping[idx]: ("" if pd.isna(val) else val)
+            for idx, val in df[col].items()
+            if idx in mapping
+        }
 
     return d
 
 
-if __name__ == '__main__':
-    filepath = parent_path.parents[1] / 'FDC-curation-admin' / 'aluminum' / 'aluminum_metadata.xlsx'
-    df1 = pd.read_excel(filepath, sheet_name='General information',
-                        header=1,
-                        usecols='A, D, E, F', index_col=0)
-    df2 = pd.read_excel(filepath, sheet_name='Documentation',
-                        usecols='A, D, E, F', index_col=0)
+if __name__ == "__main__":
+    filepath = (
+        parent_path.parents[1]
+        / "FDC-curation-admin"
+        / "aluminum"
+        / "aluminum_metadata.xlsx"
+    )
+    df1 = pd.read_excel(
+        filepath,
+        sheet_name="General information",
+        header=1,
+        usecols="A, D, E, F",
+        index_col=0,
+    )
+    df2 = pd.read_excel(
+        filepath, sheet_name="Documentation", usecols="A, D, E, F", index_col=0
+    )
     df = pd.concat([df1, df2])
     metadict = read_tabular_metadata(df)

@@ -43,11 +43,11 @@ exchange_schema = {
 }
 
 """
-Parameter dictionary schema fields. Parameter dictionaries are stored in
-in a list named 'parameters' within each process dictionary.
+Parameter dictionary schema fields. Process-scoped parameters live on each
+process; global parameters are standalone JSON-LD Parameter entities.
 """
 param_schema = {
-    "processName": {"dtype": "str", "required": True},
+    "processName": {"dtype": "str", "required": False},  # required unless GLOBAL
     "formula": {"dtype": "str", "required": False},  # Required if dependent
     "isInputParameter": {
         "dtype": "bool",
@@ -59,6 +59,7 @@ param_schema = {
     },  # (string) unique identifier; reference to connect to exchange
     "value": {"dtype": "float", "required": False},
     "description": {"dtype": "str", "required": False},
+    "parameterScope": {"dtype": "str", "required": False},  # PROCESS_SCOPE default
 }
 
 # convert units to units in olca_schema.units
@@ -188,44 +189,64 @@ def _input_parameter_value_is_numeric(v) -> bool:
     return isinstance(v, numbers.Real)
 
 
+def _is_global_scope(value) -> bool:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return False
+    return str(value).strip().upper().startswith("GLOBAL")
+
+
+def _make_param(row: pd.Series, scope: str) -> olca.Parameter:
+    """Convert a parameter DataFrame row to an olca.Parameter."""
+    row_dict = row.to_dict()
+    is_input = str(row_dict.get("isInputParameter", "")).strip().lower() == "true"
+    if is_input:
+        val = row_dict.get("value")
+        if not _input_parameter_value_is_numeric(val):
+            raise ValueError(
+                f"Input parameter {row_dict.get('name')!r} requires a numeric "
+                f"value; got {type(val).__name__}: {val!r}."
+            )
+        row_dict.pop("formula", None)
+    else:
+        row_dict.pop("value", None)
+    if scope == "GLOBAL_SCOPE":
+        row_dict["@id"] = make_uuid([row["name"]])
+    else:
+        row_dict["@id"] = make_uuid([row["processName"], row["name"]])
+    row_dict["parameterScope"] = scope
+    row_dict.pop("processName", None)
+    return olca.Parameter.from_dict(row_dict)
+
+
 def make_param_list(df_params: pd.DataFrame) -> List[olca.Parameter]:
     """
-    Get all parameter entries from a parameters dataframem, df_params.
+    Build process-scoped parameters from ``df_params`` (skip GLOBAL_SCOPE rows).
 
-    Convert rows into a dictionary, then into an olca parameter object. Append
-    each parameter object to a list and return the list.
-
-    The list of parameter objects is added to an olca process object.
+    The list is attached to an olca process object.
     """
-
     if "processName" not in df_params.columns:
         raise KeyError("Parameter DataFrame must contain a 'processName' column.")
 
     params: List[olca.Parameter] = []
-
     for _, row in df_params.iterrows():
-        # Convert row to dict
-        row_dict = row.to_dict()
-        # Handle null formula / value keys based on value of isInputParameter
-        is_input = str(row_dict.get("isInputParameter", "")).strip().lower() == "true"
-        if is_input:
-            val = row_dict.get("value")
-            if not _input_parameter_value_is_numeric(val):
-                pname = row.get("processName", row_dict.get("processName"))
-                pkey = row.get("name", row_dict.get("name"))
-                raise ValueError(
-                    f"Input parameter {pkey!r} on process {pname!r} requires a numeric "
-                    f"value; got {type(val).__name__}: {val!r}."
-                )
-            row_dict.pop("formula", None)
-        else:
-            row_dict.pop("value", None)
-        # Assign dict values
-        row_dict["@id"] = make_uuid([row["processName"], row["name"]])
-        row_dict["parameterScope"] = "PROCESS_SCOPE"
-        # Build olca Prameter object
-        obj = olca.Parameter.from_dict(row_dict)
-        params.append(obj)
+        if _is_global_scope(row.get("parameterScope")):
+            continue
+        params.append(_make_param(row, "PROCESS_SCOPE"))
+    return params
+
+
+def build_global_param_dict(df_params: pd.DataFrame) -> dict[str, olca.Parameter]:
+    """
+    Build ``{uuid: Parameter}`` for GLOBAL_SCOPE rows. Pass to ``write_objects``.
+    """
+    if df_params is None or df_params.empty:
+        return {}
+    params = {}
+    for _, row in df_params.iterrows():
+        if not _is_global_scope(row.get("parameterScope")):
+            continue
+        obj = _make_param(row, "GLOBAL_SCOPE")
+        params[obj.id] = obj
     return params
 
 
@@ -544,6 +565,7 @@ def build_process_dict(
         source_objs: dict[str, olca.Source]
         actor_objs: dict[str, olca.Actor]
         dq_objs: dict[str, olca.DQSystem]
+        df_params: DataFrame of parameters (GLOBAL_SCOPE rows are ignored here)
     :param strict_metadata: default True. If True, a missing name in
         ``source_objs`` / ``actor_objs`` (when that map is passed) raises
         ``ValueError``. Omitted ``source_objs`` / ``actor_objs`` skips resolution
